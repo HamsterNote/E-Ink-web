@@ -1,0 +1,32 @@
+/* CSS 2.1 样式，避免使用 CSS3 特性（如圆角、阴影、动画、媒体查询等） */
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #222222;
+}
+
+#app {
+  padding: 12px;
+  border: 1px solid #cccccc;
+  margin: 12px;
+}
+
+.toolbar {
+  margin: 12px;
+}
+
+.toolbar a {
+  display: inline-block; /* 允许设置内边距 */
+  padding: 6px 10px;
+  border: 1px solid #666666;
+  text-decoration: none;
+  color: #222222;
+  background: #f0f0f0;
+}
+
+.toolbar a:active {
+  background: #e6e6e6;
+}
