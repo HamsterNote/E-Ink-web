@@ -9,6 +9,10 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',
     clean: true,
+    // 将打包结果包裹为 IIFE，避免旧版 WebKit 对于顶层 this/模块语义的兼容性问题
+    iife: true,
+    // 旧版 WebKit/Safari 的全局对象行为怪异，使用 'this' 更稳妥
+    globalObject: 'this',
     environment: {
       arrowFunction: false,
       const: false,
@@ -24,14 +28,17 @@ module.exports = {
       {
         test: /\.ts$/,
         use: [
+          // IMPORTANT: Loaders run from right to left. We want TypeScript -> JS first,
+          // then let Babel process the JS for target environments. So place
+          // 'ts-loader' on the RIGHT and 'babel-loader' on the LEFT.
+          {
+            loader: 'babel-loader'
+          },
           {
             loader: 'ts-loader',
             options: {
               transpileOnly: true
             }
-          },
-          {
-            loader: 'babel-loader'
           }
         ],
         exclude: /node_modules/

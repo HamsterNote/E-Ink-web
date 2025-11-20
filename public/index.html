@@ -7,7 +7,14 @@
     <link rel="stylesheet" type="text/css" href="styles.css">
   </head>
   <body>
-    <div id="app">Loading...</div>
+    <div id="top-bar"></div>
+    <div id="app">
+        <div class="loading">加载中...</div>
+    </div>
+    <div id="bottom-bar"></div>
+    <div id="right-bar"></div>
+    <div id="left-bar"></div>
+    <div id="refresh-screen" style="display: none;"></div>
 
     <!-- 将打包后的 ES5 脚本置于文档底部，避免使用 HTML5 的 module/nomodule 属性 -->
     <script type="text/javascript" src="bundle.js"></script>
