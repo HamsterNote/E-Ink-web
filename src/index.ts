@@ -158,13 +158,13 @@ function scrollUpShelf() {
 }
 
 function createShelfBottomBar() {
-	const blankButton1 = $(`<div class="bottom-bar-btn"></div>`)
 	const blankButton2 = $(`<div class="bottom-bar-btn"></div>`)
+	const loginButton = $(`<div id="login-btn" class="bottom-bar-btn">登录</div>`)
 	const refreshScreenButton = $(`<div id="shelf-refresh-screen" class="bottom-bar-btn">刷屏</div>`)
 	const scrollDownButton = $(`<div id="shelf-scroll-down-bar" class="bottom-bar-btn">下翻</div>`)
 	const scrollUpButton = $(`<div id="shelf-scroll-up-bar" class="bottom-bar-btn">上翻</div>`)
 	let shelfBottomBar = $(`<div class="shelf-bottom-bar"></div>`)
-	shelfBottomBar.append(blankButton1)
+	shelfBottomBar.append(loginButton)
 	shelfBottomBar.append(blankButton2)
 	shelfBottomBar.append(refreshScreenButton)
 	shelfBottomBar.append(scrollUpButton)
@@ -172,8 +172,24 @@ function createShelfBottomBar() {
 	scrollDownButton.click(scrollDownShelf)
 	scrollUpButton.click(scrollUpShelf)
 	refreshScreenButton.click(refreshScreen)
+	loginButton.click(showLoginModal)
 	return shelfBottomBar;
 }
+
+// 弹出登录窗口
+function showLoginModal() {
+	const $content = $(`<div id="login-modal-content"></div>`)
+	const $usernameInput = $(`<input class="ink-input" type="text" placeholder="用户名">`)
+	const $passwordInput = $(`<input class="ink-input" type="password" placeholder="密码">`)
+	const $loginBtn = $(`<button class="ink-button">登录</button>`)
+	const $modalTitle = $(`<div class="modal-title">请输入用户名和密码</div>`)
+	$content.append($modalTitle)
+	$content.append($usernameInput)
+	$content.append($passwordInput)
+	$content.append($loginBtn)
+	showModal($content, { showClose: true })
+}
+
 // Shelf end
 
 function showHome() {
@@ -232,6 +248,48 @@ function refreshScreen() {
 	setTimeout(() => {
 		$refreshScreen.hide();
 	}, 200)
+}
+
+let modalId = 0
+
+function showModal(content: JQuery<HTMLElement>, {
+	showClose = false,
+	onConfirm = undefined
+}: {
+	showClose?: boolean;
+	onConfirm?: () => void
+} = {
+	showClose: false,
+	onConfirm: undefined
+}): void {
+	const currentId = modalId++
+	const $app = $('#app');
+	const $modal = $(`<div id="modal-${currentId}" class="modal"></div>`);
+	const $modalMask = $(`<div id="modal-mask-${currentId}" class="modal-mask"></div>`)
+	$app.append($modalMask)
+	$modal.append(content)
+	if (showClose) {
+		const $closeBtn = $(`<div class="close-btn">✕</div>`);
+		$closeBtn.click(() => {
+			$modal.remove();
+			$modalMask.remove();
+		})
+		$modal.append($closeBtn);
+	}
+	if (onConfirm !== undefined) {
+		const $confirmBtn = $(`<div class="confirm-btn">确认</div>`);
+		$modal.append($confirmBtn);
+		$confirmBtn.click(() => {
+			onConfirm();
+			$modal.remove();
+			$modalMask.remove();
+		})
+	}
+	$app.append($modal);
+	$modalMask.click(() => {
+		$modal.remove();
+		$modalMask.remove();
+	})
 }
 
 // 公共函数 end
