@@ -1,7 +1,18 @@
 export interface Book {
-	id: number;
+	id: string;
 	name: string;
 	cover: string;
+	order?: number;
+	parent?: string;
+	type: 'book'
+}
+
+export interface Directory {
+	id: string;
+	order?: number;
+	parent?: string;
+	name: string;
+	type: 'directory'
 }
 
 export interface UserInfo {

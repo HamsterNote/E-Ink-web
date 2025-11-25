@@ -24,7 +24,6 @@ body {
 }
 
 #app {
-    padding: 1mm;
     width: 100%;
     height: 100%;
     position: relative;
@@ -69,31 +68,101 @@ body {
     text-align: center;
 }
 
-#scroll-bar {
-    height: 100%;
-    width: 15px;
-}
-
-#scroll-bar-wrapper {
+.scroll-area {
     width: 100%;
     height: 100%;
     position: relative;
+    overflow: hidden;
+    padding: 0 8mm 0 0;
 }
 
-#scroll-bar-content {
-    position: absolute;
-    right: 6px;
-    width: 3px;
-    background: #000;
+.scroll-area.no-scroll {
+    padding-right: 0;
 }
 
-#scroll-bar-background {
+.scroll-area.no-scroll .scroll-bar-wrapper {
+    display: none;
+}
+
+.scroll-bar-wrapper {
+    width: 8mm;
+    height: 100%;
     position: absolute;
     top: 0;
-    bottom: 0;
-    right: 7px;
-    width: 1px;
-    background: #000;
+    right: 0;
+    background: #fff;
+}
+
+.scroll-bar {
+    position: absolute;
+    top: 8mm;
+    right: 0;
+    bottom: 8mm;
+    width: 8mm;
+    background: #eee;
+}
+
+.scroll-bar-item {
+    position: absolute;
+    right: 0;
+    width: 8mm;
+    background: #fff;
+    border: 1px solid #000;
+}
+
+.scroll-bar-item.active {
+    background: #eee;
+}
+
+.scroll-bar-item.active:after {
+    content: '❯';
+    position: absolute;
+    left: -15mm;
+    top: 50%;
+    margin-top: -10mm;
+    width: 2cm;
+    height: 2cm;
+    line-height: 2cm;
+    text-align: center;
+}
+
+.scroll-button {
+    width: 8mm;
+    height: 8mm;
+    position: absolute;
+    right: 0;
+    border: 1px solid #000;
+    background: #fff;
+}
+
+.scroll-down-button {
+    bottom: -8mm;
+}
+
+.scroll-button:after {
+    content: '';
+    position: absolute;
+    width: 4mm;
+    height: 4mm;
+    border-left: 2mm solid transparent;
+    border-right: 2mm solid transparent;
+    box-sizing: border-box;
+}
+
+.scroll-down-button:after {
+    top: 3mm;
+    left: 2mm;
+    border-top: 2mm solid #000;
+}
+
+.scroll-up-button {
+    top: -8mm;
+}
+
+.scroll-up-button:after {
+    bottom: 3mm;
+    left: 2mm;
+    border-bottom: 2mm solid #000;
 }
 
 #refresh-screen {
@@ -136,7 +205,7 @@ body {
 /*Modal start*/
 .modal {
     position: fixed;
-    top: 2cm;
+    top: 1.5cm;
     left: 0;
     right: 0;
     z-index: 2;
@@ -146,7 +215,7 @@ body {
     max-width: 8cm;
     margin: 0 auto;
     text-align: center;
-    padding: 20px;
+    padding: 4mm;
     border: 1px solid #000;
     border-radius: 4px;
     background: #fff;
@@ -175,17 +244,17 @@ body {
     position: absolute;
     top: 0;
     right: 0;
-    width: 30px;
-    height: 30px;
-    line-height: 30px;
+    width: 6mm;
+    height: 6mm;
+    line-height: 6mm;
     text-align: center;
 }
 
 .modal-title {
     text-align: center;
     width: 100%;
-    line-height: 30px;
-    height: 30px;
+    line-height: 1cm;
+    height: 1cm;
     font-size: 4mm;
 }
 /*Modal end*/
@@ -195,7 +264,7 @@ body {
     width: 5cm;
     height: 6mm;
     line-height: 1;
-    margin: 10px auto;
+    margin: 2mm auto;
     border-radius: 0;
     border: 0;
     outline: 1px solid black;
@@ -204,10 +273,25 @@ body {
     font-size: 4mm;
 }
 
-.ink-input.left {
-    width: 2.3cm;
+.ink-form-row .left {
+    width: 2.4cm;
     margin: 0 1mm 0 0;
     float: left;
+}
+
+.ink-form-row .right {
+    width: 2.5cm;
+    margin: 0 0 0 1mm;
+}
+
+.ink-form-row .half {
+    width: 2.4cm;
+    margin: 0 1mm 0 0;
+    float: left;
+}
+
+.ink-form-row .half+.half {
+    margin: 0 0 0 1mm;
 }
 
 .ink-button {
@@ -219,14 +303,9 @@ body {
     background: #fff;
     border: 0;
     outline: 1px solid black;
-    margin: 10px auto;
+    margin: 2mm auto;
     box-sizing: border-box;
     font-size: 4mm;
-}
-
-.ink-button.right {
-    width: 2.5cm;
-    margin: 0 0 0 1mm;
 }
 
 .ink-form-row {
@@ -241,7 +320,11 @@ body {
 
 /*Shelf start*/
 #shelf {
-    padding-bottom: 1cm;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 1cm;
+    right: 0;
 }
 .shelf-bottom-bar {
     position: absolute;
@@ -259,6 +342,12 @@ body {
     text-align: center;
     display: inline-block;
 }
+.bottom-bar-btn.wide {
+    width: 40%;
+}
+.bottom-bar-btn.left {
+    text-align: left;
+}
 .book {
     float: left;
     width: 33.333%;
@@ -269,20 +358,41 @@ body {
     width: 100%;
     height: 0;
     padding-bottom: 141.4%;
+    position: relative;
+}
+.book-cover-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+.directory-icon {
+    left: 25%;
+    width: 50%;
+    height: 20%;
+    top: 40%;
 }
 .book-name {
     display: block;
-    line-height: 30px;
-    font-size: 22px;
+    line-height: 1.2;
+    font-size: 3.5mm;
     width: 100%;
-    min-height: 60px;
-    max-height: 60px;
+    min-height: 8.4mm;
+    max-height: 8.4mm;
     overflow: hidden;
-    margin-top: 10px;
+    margin-top: 1mm;
 }
-.user-info-menu {
+
+.book-manager.modal {
     bottom: 1cm;
-    left: 0;
-    width: 20%;
+    top: 5mm;
+}
+.book-manager .modal-wrapper {
+    height: 100%;
+}
+.book-manager .book-manager-menu-content {
+    height: 100%;
+    overflow: auto;
 }
 /*Shelf end*/
