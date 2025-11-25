@@ -73,6 +73,17 @@ module.exports = {
     compress: false,
     client: {
       overlay: false
-    }
+    },
+    // 开发环境代理：将所有以 /api 开头的请求转发到本地后端服务
+    // 例如：/api/v1/auth/send-email-code -> http://localhost:3000/api/v1/auth/send-email-code
+    // 如果你的后端并不需要 /api 前缀，可以取消注释 pathRewrite 去掉前缀
+    proxy: [{
+        context: ['/api'],
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        // 保留 /api 前缀。如果后端没有 /api 前缀，请取消注释下一行：
+        // pathRewrite: { '^/api': '' },
+    }]
   }
 };

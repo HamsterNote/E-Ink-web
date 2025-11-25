@@ -3,3 +3,10 @@ export interface Book {
 	name: string;
 	cover: string;
 }
+
+export interface UserInfo {
+	uuid: string;
+	email: string;
+	username: string;
+	avatar: string;
+}
