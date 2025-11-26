@@ -184,9 +184,36 @@ function createManageButton() {
 		const $multiSelect = $(`<div class="menu-item">选择</div>`)
 		const $refreshShelf = $(`<div class="menu-item">刷新书架</div>`)
 		const $menuContent = [$upload, $newDir, $multiSelect, $refreshShelf]
+		$upload.click(() => {
+			showUploadModal();
+		})
 		showMenu($menuContent, 'settings-menu', 'bottom: 1cm; width: 20%; left: 60%;');
 	})
 	return $settingsButton
+}
+
+function showUploadModal() {
+	const $content = $(`<div id="upload-modal-content"><div class="modal-title">上传文档</div></div>`)
+	const $uploadButton = $(`<div class="upload-button"></div>`)
+	const $uploadInput = $(`<input class="upload-input" type="file" />`)
+	$uploadButton.append($uploadInput)
+	$uploadInput.on('change', () => {
+		const file: File | undefined = ($uploadInput[0] as HTMLInputElement).files?.[0]
+		file && uploadFile(file, (percent) => {
+			console.log(percent)
+		}, () => {
+			console.log('complete')
+		}, () => {
+			console.log('error');
+		})
+		console.log('文件选择', $uploadButton.val())
+	})
+	$content.append($uploadButton)
+	const $fileName = $(`<input class="ink-input" placeholder="文件名（选填）" />`)
+	$content.append($fileName)
+	const $submitButton = $(`<button class="ink-button">上传</button>`)
+	$content.append($submitButton)
+	showModal($content, { showClose: true })
 }
 
 // 点击用户名的菜单
@@ -742,6 +769,98 @@ function getEmailCode(email: string, purpose: string, callback: (res: any) => vo
 			} else {
 				alert('错误：' + error);
 			}
+		}
+	});
+}
+
+function uploadFile(file: File, onProgress: (progress: number) => void, onComplete: (res: any) => void, onError?: (error: any) => void) {
+	// 1) 初始化上传，获取 uuid
+	$.ajax({
+		type: 'POST',
+		url: '/api/v1/files/init',
+		data: JSON.stringify({
+			originalFilename: file.name,
+			size: file.size
+		}),
+		contentType: 'application/json',
+		dataType: 'json',
+		success: function(initRes: any) {
+			try {
+				var uuid = initRes && (initRes.uuid || initRes.id || initRes.data || initRes.result && initRes.result.uuid);
+				if (!uuid) {
+					onError && onError({ message: 'init upload missing uuid', initRes: initRes });
+					return;
+				}
+				// 2) 通过 PUT 将文件二进制流直传到服务端，同时监听进度
+				var xhr = new XMLHttpRequest();
+				xhr.open('PUT', '/api/v1/files/' + encodeURIComponent(uuid), true);
+				// 携带认证头（与全局 jQuery 设置保持一致，这里是原生 XHR 需手动设置）
+				try {
+					var token = localStorage.getItem('jwt_token') || (getCookie('jwt_token') || '');
+					if (token) {
+						xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+					}
+				} catch (e) {
+					// ignore
+				}
+				// 设定内容类型（若无类型则使用通用二进制）
+				var contentType = (file as any).type || 'application/octet-stream';
+				xhr.setRequestHeader('Content-Type', contentType);
+				// 进度回调
+				if (xhr.upload && typeof onProgress === 'function') {
+					xhr.upload.onprogress = function(evt: ProgressEvent) {
+						if (evt && evt.lengthComputable) {
+							var percent = Math.floor((evt.loaded / evt.total) * 100);
+							onProgress(percent);
+						}
+					};
+				}
+				xhr.onerror = function() {
+					onError && onError({ message: 'upload network error' });
+				};
+				xhr.onabort = function() {
+					onError && onError({ message: 'upload aborted' });
+				};
+				xhr.onload = function() {
+					// 完成时尝试解析响应
+					var status = xhr.status;
+					if (status >= 200 && status < 300) {
+						var text = xhr.responseText;
+						var res: any = null;
+						try {
+							res = text ? JSON.parse(text) : null;
+						} catch (e) {
+							// 非 JSON 响应
+							res = { ok: true, uuid: uuid };
+						}
+						if (!res) {
+							// 若无响应体，尝试查询一次状态
+							$.ajax({
+								type: 'GET',
+								url: '/api/v1/files/' + encodeURIComponent(uuid) + '/status',
+								dataType: 'json',
+								success: function(statusRes: any) {
+									onComplete(statusRes || { ok: true, uuid: uuid });
+								},
+								error: function() {
+									onComplete({ ok: true, uuid: uuid });
+								}
+							});
+						} else {
+							onComplete(res || { ok: true, uuid: uuid });
+						}
+					} else {
+						onError && onError({ message: 'upload failed', status: status, body: xhr.responseText });
+					}
+				};
+				// 发送文件本体
+				xhr.send(file);
+			} catch (err) {
+				onError && onError(err);
+			}
+		},
+		error: function(xhr, status, error) {
+			onError && onError(error || { message: 'init upload error', status: status });
 		}
 	});
 }
