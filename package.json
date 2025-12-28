@@ -1,6 +1,6 @@
 {
   "name": "e-ink-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "HTML4 + CSS2.1 + ES5 前端项目（Webpack + TypeScript + jQuery）",
   "scripts": {

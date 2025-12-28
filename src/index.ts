@@ -20,12 +20,15 @@ function clearContent(): void {
 	$leftBar.html('');
 }
 
-// 显示主页
+// 显示主页（书架）
 function showHome(): void {
 	clearContent()
 	var $app = $('#app');
 	$app.append(createShelf());
 }
+
+// 将 showHome 函数暴露到全局，供阅读器模块调用
+(window as any).showHome = showHome;
 
 // DOM Ready（使用 jQuery 1.x 风格）
 $(function() {
