@@ -1,7 +1,7 @@
 // 注意：保持 ES5 语法（避免 let/const、箭头函数、class 等）
 // TypeScript 仅做类型检查；输出通过 Babel/webpack 降级为 ES5。
 import $ from 'jquery';
-import { Book, Directory, UserInfo } from './types';
+import { BookFile, Directory, GetFileListResponse, UserInfo } from './types';
 
 // 通用 start
 // 使用 Base64 的 SVG 作为目录图标（线框文件夹）
@@ -17,17 +17,40 @@ function operationCntPlus() {
 		refreshScreen()
 	}
 }
+
+// 每行文档数量
+const bookPerRow = 3
+
+// 文档的大概比例
+const bookRatio = 1.5
+
+// 每页最多多少个文档：innerHeight / (innerWidth / bookPerRow * bookRatio) * bookPerRow
+const bookPerPage = Math.ceil(window.innerHeight / (window.innerWidth / bookPerRow * bookRatio) * bookPerRow)
 // 通用 end
 
 // Home start
 
 // Book start
-function createBook(book: Book) {
-	let result = $(`<div class="book"><div class="book-cover"><img class="book-cover-image" src="${book.cover}"/></div><span class="book-name">${book.name}</span></div>`)
-	result.contextmenu(() => {
-		alert('a')
-	})
-	return result
+function createBook(book: BookFile, bookItem: JQuery<HTMLElement>) {
+	const $bookItem = bookItem || $(`<div></div>`)
+	$bookItem.attr('class', 'book')
+	$bookItem.html('')
+	const $cover = $(`<div class="book-cover"><img class="book-cover-image" src=""/></div>`);
+	const $name = $(`<span class="book-name">${book.originalFilename}</span>`)
+	$bookItem.append($cover);
+	$bookItem.append($name);
+	$bookItem.attr('page', book.page)
+	$bookItem.attr('pageSize', book.pageSize)
+	$bookItem.attr('uuid', book.uuid)
+	if (!bookItem) {
+		// 第一次创建才添加事件避免重复绑定
+		$bookItem.click(() => {
+			if (isMultiSelect) {
+				$bookItem.toggleClass('active')
+			}
+		})
+	}
+	return $bookItem
 }
 // Book end
 
@@ -42,73 +65,15 @@ function createDirectory(directory: Directory) {
 // Directory end
 
 // Shelf start
-const bookList: Book[] = [{
-	id: '1',
-	cover: '',
-	name: '哈哈1',
-	order: 10,
-	parent: '11',
-	type: 'book'
-}, {
-	id: '2',
-	cover: '',
-	name: '哈哈2',
-	order: 9,
-	type: 'book'
-}, {
-	id: '5',
-	cover: '',
-	name: '哈哈5',
-	order: 1,
-	parent: '11',
-	type: 'book'
-}, {
-	id: '3',
-	cover: '',
-	name: '哈哈3',
-	order: 3,
-	parent: '12',
-	type: 'book'
-}]
+const loadedDirectory: Array<Directory | null | undefined> = []
+const bookList: BookFile[] = []
 
-const directoryList: Directory[] = [{
-	id: '11',
-	order: 8,
-	name: '目录1',
-	type: 'directory'
-}, {
-	id: '12',
-	order: 7,
-	name: '目录2',
-	type: 'directory'
-}, {
-	id: '13',
-	order: 6,
-	name: '目录3',
-	parent: '12',
-	type: 'directory'
-}]
+const directoryList: Directory[] = []
 
-let currentShelfDirectory: string | undefined = undefined
+let currentShelfDirectory: Directory | undefined = undefined
 
 function getCurrentList() {
-	let parentDirectory: Directory[] = []
-	if (currentShelfDirectory !== undefined) {
-		// 推入上级文件夹
-		for (const directory of directoryList) {
-			if (directory.id === currentShelfDirectory) {
-				parentDirectory.push({
-					type: 'directory',
-					id: directory?.parent,
-					name: '上级目录',
-					order: -Infinity,
-				} as Directory)
-				break;
-			}
-		}
-	}
-	const result: Array<Book | Directory> = [
-		...parentDirectory,
+	const result: Array<BookFile | Directory> = [
 		...bookList.filter((book) => book.parent === currentShelfDirectory),
 		...directoryList.filter((directory) => directory.parent === currentShelfDirectory),
 	].sort((a, b) => {
@@ -123,6 +88,10 @@ function getCurrentList() {
 	return result;
 }
 
+function isBook(bookOrDirectory: BookFile | Directory): bookOrDirectory is BookFile {
+	return 'originalFilename' in bookOrDirectory;
+}
+
 function createShelf() {
 	currentShelfDirectory = undefined
 	let $shelf = $('<div id="shelf"></div>')
@@ -134,22 +103,68 @@ function createShelf() {
 	return $shelf
 }
 
-function refreshShelf() {
+async function loadBooks(parent: Directory | undefined, page: number, pageSize: number) {
+	const res = await getFileList(parent, page, pageSize);
+	const bookItemList = $('.book');
+	const start = page * pageSize;
+	const end = (page + 1) * pageSize - 1;
+	bookItemList.each((i, item) => {
+		console.log('start ', start, ' end ', end, ' i ', i);
+		if (i >= start && i <= end) {
+			const resItem = res.items[i - start];
+			if (resItem) {
+				console.log('loadBook ', resItem);
+				createBook(resItem, $(item))
+			}
+		}
+	})
+}
+
+async function refreshShelf() {
 	const $shelf = $('#shelf')
 	if (!$shelf.length) {
 		return;
 	}
+	const indexOfLoaded = loadedDirectory.indexOf(currentShelfDirectory)
+	console.log(indexOfLoaded);
+	const pageSize = bookPerPage + bookPerRow;
+	if (indexOfLoaded === -1) {
+		const res = await getFileList(currentShelfDirectory, 0, pageSize);
+		const total = res.total;
+		bookList.push(...res.items)
+		// 提前填满
+		const rest: BookFile[] = [];
+		for (let i = res.items.length; i < total; i++) {
+			rest.push({
+				uuid: '',
+				originalFilename: '加载中...',
+				createAt: '',
+				color: '',
+				tags: '',
+				ext: '',
+				size: 0,
+				order: 0,
+				parent: currentShelfDirectory,
+				page: Math.floor(i / pageSize),
+				pageSize
+			})
+		}
+		bookList.push(...rest)
+	}
+	loadedDirectory.push(currentShelfDirectory)
 	$shelf.html('')
 	const $shelfContent = $(`<div class="shelf-content">`)
+	const bookItemList: JQuery<HTMLElement>[] = []
 	getCurrentList().forEach(bookOrDirectory => {
-		if (bookOrDirectory.type === 'book') {
+		if (isBook(bookOrDirectory)) {
 			let bookItem = createBook(bookOrDirectory)
 			$shelfContent.append(bookItem)
-		} else if (bookOrDirectory.type === 'directory') {
+			bookItemList.push(bookItem)
+		} else {
 			let directoryItem = createDirectory(bookOrDirectory)
 			$shelfContent.append(directoryItem)
 			directoryItem.click(() => {
-				currentShelfDirectory = bookOrDirectory.id;
+				currentShelfDirectory = bookOrDirectory;
 				console.log(currentShelfDirectory)
 				refreshShelf()
 			})
@@ -158,7 +173,29 @@ function refreshShelf() {
 	$shelfContent.append('<div class="clear-both"></div>')
 	const $scrollArea = createScrollArea($shelfContent)
 	$shelf.append($scrollArea)
-	activeScrollArea($scrollArea, true)
+	activeScrollArea($scrollArea, true, (scrollTop) => {
+		// 目前来看所有的书都是顺序摆放的
+		const pages: number[] = [];
+		for (const book of bookItemList) {
+			if (book.attr('uuid')) {
+				continue;
+			}
+			const boundingRect = book[0]?.getBoundingClientRect()
+			if (boundingRect && boundingRect.top + boundingRect.height > 0 && boundingRect.top < window.innerHeight) {
+				// 出现在视口中
+				const page = book.attr('page')
+				if (page) {
+					pages.push(parseInt(page))
+				}
+			}
+		}
+		if (pages.length) {
+			const minPage = Math.min(...pages)
+			const maxPage = Math.max(...pages)
+			console.log(minPage, maxPage, pages);
+			loadBooks(currentShelfDirectory, minPage, (maxPage - minPage + 1) * pageSize)
+		}
+	})
 }
 
 function createShelfBottomBar() {
@@ -184,6 +221,9 @@ function createManageButton() {
 		const $multiSelect = $(`<div class="menu-item">选择</div>`)
 		const $refreshShelf = $(`<div class="menu-item">刷新书架</div>`)
 		const $menuContent = [$upload, $newDir, $multiSelect, $refreshShelf]
+		$multiSelect.click(() => {
+			switchMultiSelect();
+		})
 		$upload.click(() => {
 			showUploadModal();
 		})
@@ -214,6 +254,54 @@ function showUploadModal() {
 	const $submitButton = $(`<button class="ink-button">上传</button>`)
 	$content.append($submitButton)
 	showModal($content, { showClose: true })
+}
+
+let isMultiSelect = false
+
+// 多选
+function switchMultiSelect() {
+	isMultiSelect = !isMultiSelect
+	switchMultiSelectMode()
+}
+
+function switchMultiSelectMode() {
+	if (isMultiSelect) {
+		$('#app').addClass('multi-select-mode');
+		createMultiSelectBottomBar();
+	} else {
+		$('.multi-select-mode .book').removeClass('active');
+		$('#app').removeClass('multi-select-mode');
+		$('.multi-select-bottom-bar').remove();
+	}
+}
+
+function getSelected() {
+	return {
+		books: $('.multi-select-mode .book.active')
+	};
+}
+
+function createMultiSelectBottomBar() {
+	const $bottomBar = $('#bottom-bar')
+	const $multiSelectBottomBar = $(`<div class="shelf-bottom-bar multi-select-bottom-bar"></div>`)
+	const $quitBtn = $('<div class="bottom-bar-btn quit-btn">退出多选</div>')
+	const $cutBtn = $('<div class="bottom-bar-btn cut-btn">剪切</div>')
+	const $pasteBtn = $('<div class="bottom-bar-btn paste-btn">粘贴</div>')
+	const $deleteBtn = $('<div class="bottom-bar-btn paste-btn">删除</div>')
+	$quitBtn.click(switchMultiSelect)
+	$multiSelectBottomBar.append($quitBtn)
+	$multiSelectBottomBar.append($deleteBtn)
+	$deleteBtn.click(() => {
+		deleteBookOrDirectory(getSelected());
+	})
+	$bottomBar.append($multiSelectBottomBar)
+}
+
+function deleteBookOrDirectory({ books }: { books: JQuery<HTMLElement> }) {
+	const confirmDelete = confirm('真的要删除吗？')
+	if (confirmDelete) {
+
+	}
 }
 
 // 点击用户名的菜单
@@ -633,7 +721,7 @@ function showModal(content: JQuery<HTMLElement>, {
 	})
 }
 
-function activeScrollArea($scrollArea: JQuery<HTMLElement>, forceDisplayScrollBar = false) {
+function activeScrollArea($scrollArea: JQuery<HTMLElement>, forceDisplayScrollBar = false, onScroll?: (scrollTop: number) => void) {
 	$scrollArea.ready(() => {
 		const $scrollBarWrapper = $(`<div class="scroll-bar-wrapper"></div>`);
 		const $content = $scrollArea.find('> :first-child')
@@ -661,12 +749,14 @@ function activeScrollArea($scrollArea: JQuery<HTMLElement>, forceDisplayScrollBa
 			marginTop = Math.max(totalAreaHeight - contentHeight, marginTop)
 			$content.css('margin-top', `${marginTop}px`)
 			$scrollBarItem.css('top', `${-marginTop / contentHeight * 100}%`)
+			onScroll?.(marginTop)
 		})
 		$scrollUpButton.click(() => {
 			marginTop += totalAreaHeight - 80;
 			marginTop = Math.min(0, marginTop)
 			$content.css('margin-top', `${marginTop}px`)
 			$scrollBarItem.css('top', `${-marginTop / contentHeight * 100}%`)
+			onScroll?.(marginTop)
 		})
 	})
 }
@@ -864,6 +954,33 @@ function uploadFile(file: File, onProgress: (progress: number) => void, onComple
 		}
 	});
 }
+
+async function getFileList(parent: Directory | undefined, page: number, pageSize: number) {
+	return new Promise<GetFileListResponse>((resolve, reject) => {
+		$.ajax({
+			type: 'GET',
+			url: `/api/v1/files?${parent ? `parentUuid=${parent.uuid}&` : ''}page=${page + 1}&pageSize=${pageSize}`,
+			dataType: 'json',
+			success: function(response) {
+				resolve({
+					...response,
+					items: response.items.map((item: Omit<BookFile, 'pageSize' | 'page'>) => ({
+						...item,
+						page,
+						pageSize,
+						parent,
+					}))
+				});
+			},
+			error: function(xhr, status, error) {
+				reject(error);
+			}
+		})
+	})
+}
+
+function getDirectoryList() {}
+
 // 接口函数 end
 
 // 屏幕相关 start

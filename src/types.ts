@@ -1,18 +1,34 @@
-export interface Book {
-	id: string;
-	name: string;
-	cover: string;
+export interface Directory {
+	uuid: string;
 	order?: number;
-	parent?: string;
-	type: 'book'
+	name: string;
+	type: 'directory';
+	parent: Directory | undefined;
 }
 
-export interface Directory {
-	id: string;
-	order?: number;
-	parent?: string;
-	name: string;
-	type: 'directory'
+export interface BookFile {
+	size: number;
+	createAt: string;
+	ext: string;
+	originalFilename: string;
+	order: number;
+	tags: string;
+	color: string;
+	uuid: string;
+	parent: Directory | undefined;
+	page: number;
+	pageSize: number;
+}
+
+export interface GetFileListResponse {
+	items: BookFile[];
+	page: number;
+	pageSize: number;
+	total: number;
+}
+
+export interface DirectoryResponse {
+	items: Directory[];
 }
 
 export interface UserInfo {
