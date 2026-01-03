@@ -28,6 +28,14 @@ function showHome(): void {
   $app.append(createShelf());
 }
 
+/**
+ * 处理 URL 中的 JWT 参数登录
+ * 用于 OAuth 回调场景：外部认证服务将 JWT 通过 URL 参数传回
+ * 安全说明：
+ * - JWT 会立即存储到 localStorage 和 Cookie
+ * - URL 中的 jwt 参数会被立即移除（通过 replaceState）
+ * - 这样可以防止 JWT 泄露到浏览器历史、Referer 头和服务器日志
+ */
 function handleJwtQueryLogin(): void {
   var jwtFromQuery = getQueryParam("jwt");
   if (jwtFromQuery) {

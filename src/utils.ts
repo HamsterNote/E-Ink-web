@@ -68,7 +68,8 @@ export function getQueryParam(name: string): string | null {
 }
 
 /**
- * 从 URL 中移除指定的 query 参数（不刷新页面）
+ * 从 URL 中移除指定的 query 参数
+ * 优先使用 replaceState（不刷新页面），旧浏览器降级为 location.replace（会刷新页面）
  * @param name 要移除的参数名称
  */
 export function removeQueryParam(name: string): void {
@@ -103,9 +104,12 @@ export function removeQueryParam(name: string): void {
   }
   newUrl += hash;
 
-  // 使用 replaceState 更新 URL，不产生历史记录
+  // 优先使用 replaceState（不刷新页面），旧浏览器降级为 location.replace
   if (window.history && window.history.replaceState) {
     window.history.replaceState({}, document.title, newUrl);
+  } else {
+    // IE9 及以下不支持 replaceState，降级为页面跳转
+    window.location.replace(newUrl);
   }
 }
 
