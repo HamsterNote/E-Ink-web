@@ -9,14 +9,30 @@
  * @returns Cookie 值，不存在则返回 null
  */
 export function getCookie(name: string): string | null {
-	var cookies = document.cookie.split(';');
-	for (var i = 0; i < cookies.length; i++) {
-		var cookie = cookies[i].trim();
-		if (cookie.indexOf(name + '=') === 0) {
-			return cookie.substring(name.length + 1);
-		}
-	}
-	return null;
+  var cookies = document.cookie.split(";");
+  for (var i = 0; i < cookies.length; i++) {
+    var cookie = cookies[i].trim();
+    if (cookie.indexOf(name + "=") === 0) {
+      return cookie.substring(name.length + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * 设置 Cookie
+ * @param name Cookie 名称
+ * @param value Cookie 值
+ * @param days 过期天数（可选，默认为会话 Cookie）
+ */
+export function setCookie(name: string, value: string, days?: number): void {
+  var expires = "";
+  if (days) {
+    var date = new Date();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+    expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + value + expires + "; path=/";
 }
 
 /**
@@ -24,7 +40,73 @@ export function getCookie(name: string): string | null {
  * @param name Cookie 名称
  */
 export function removeCookie(name: string): void {
-	document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+}
+
+// URL Query 参数操作
+
+/**
+ * 获取 URL query 参数值
+ * @param name 参数名称
+ * @returns 参数值，不存在则返回 null
+ */
+export function getQueryParam(name: string): string | null {
+  var search = window.location.search;
+  if (!search || search.length <= 1) {
+    return null;
+  }
+  // 去掉开头的 '?'
+  var queryString = search.substring(1);
+  var params = queryString.split("&");
+  for (var i = 0; i < params.length; i++) {
+    var pair = params[i].split("=");
+    if (decodeURIComponent(pair[0]) === name) {
+      return pair.length > 1 ? decodeURIComponent(pair[1]) : "";
+    }
+  }
+  return null;
+}
+
+/**
+ * 从 URL 中移除指定的 query 参数（不刷新页面）
+ * @param name 要移除的参数名称
+ */
+export function removeQueryParam(name: string): void {
+  var url = window.location.href;
+  var urlParts = url.split("?");
+  if (urlParts.length < 2) {
+    return;
+  }
+
+  var baseUrl = urlParts[0];
+  var queryString = urlParts[1];
+  // 处理 hash
+  var hashIndex = queryString.indexOf("#");
+  var hash = "";
+  if (hashIndex !== -1) {
+    hash = queryString.substring(hashIndex);
+    queryString = queryString.substring(0, hashIndex);
+  }
+
+  var params = queryString.split("&");
+  var newParams: string[] = [];
+  for (var i = 0; i < params.length; i++) {
+    var pair = params[i].split("=");
+    if (decodeURIComponent(pair[0]) !== name) {
+      newParams.push(params[i]);
+    }
+  }
+
+  var newUrl = baseUrl;
+  if (newParams.length > 0) {
+    newUrl += "?" + newParams.join("&");
+  }
+  newUrl += hash;
+
+  // 使用 replaceState 更新 URL，不产生历史记录
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState({}, document.title, newUrl);
+  }
 }
 
 // 屏幕相关
@@ -34,25 +116,26 @@ export function removeCookie(name: string): void {
  * @returns [xDPC, yDPC] 分别表示X轴和Y轴方向的 DPC
  */
 export function getScreenDPC(): number[] {
-	var dpc: number[] = [];
-	// 创建一个临时div元素
-	var div = document.createElement('div');
-	// 设置其宽度为1厘米，并确保在视口外不可见
-	div.style.cssText = 'width:1cm;height:1cm;position:absolute;left:0px;top:0px;z-index:99;visibility:hidden;pointer-events:none;';
-	// 将元素添加到DOM中
-	document.body.appendChild(div);
-	// 测量元素的实际像素宽度和高度，这大致就是 DPC 值
-	dpc[0] = Math.round(div.offsetWidth);
-	dpc[1] = Math.round(div.offsetHeight);
-	// 测量完成后，从DOM中移除该元素
-	if (div.parentNode) {
-		div.parentNode.removeChild(div);
-	}
+  var dpc: number[] = [];
+  // 创建一个临时div元素
+  var div = document.createElement("div");
+  // 设置其宽度为1厘米，并确保在视口外不可见
+  div.style.cssText =
+    "width:1cm;height:1cm;position:absolute;left:0px;top:0px;z-index:99;visibility:hidden;pointer-events:none;";
+  // 将元素添加到DOM中
+  document.body.appendChild(div);
+  // 测量元素的实际像素宽度和高度，这大致就是 DPC 值
+  dpc[0] = Math.round(div.offsetWidth);
+  dpc[1] = Math.round(div.offsetHeight);
+  // 测量完成后，从DOM中移除该元素
+  if (div.parentNode) {
+    div.parentNode.removeChild(div);
+  }
 
-	return dpc;
+  return dpc;
 }
 
 // 全局 DPC 值
-export var globalDpc = getScreenDPC()
+export var globalDpc = getScreenDPC();
 export var globalDpcX = globalDpc[0];
 export var globalDpcY = globalDpc[1];
