@@ -5,9 +5,10 @@ import { initAjaxSetup, getUserInfo, setShowLoginModalCallback } from "./api";
 import { showLoginModal, showUserInfo, setRefreshShelfCallback } from "./auth";
 import { setRegisterRefreshShelfCallback } from "./auth/register";
 import { createShelf, refreshShelf } from "./shelf";
+import { setOpenBookCallback } from "./shelf/book";
+import { createReader, setShowHomeCallback } from "./reader";
 import { getQueryParam, removeQueryParam, setCookie } from "./utils";
 
-// 清除所有内容
 function clearContent(): void {
   var $app = $("#app");
   $app.html("");
@@ -21,11 +22,16 @@ function clearContent(): void {
   $leftBar.html("");
 }
 
-// 显示主页
-function showHome(): void {
+export function showHome(): void {
   clearContent();
   var $app = $("#app");
   $app.append(createShelf());
+}
+
+export function showReader(bookUuid: string): void {
+  clearContent();
+  var $app = $("#app");
+  $app.append(createReader(bookUuid));
 }
 
 /**
@@ -51,6 +57,8 @@ $(function () {
   setShowLoginModalCallback(showLoginModal);
   setRefreshShelfCallback(refreshShelf);
   setRegisterRefreshShelfCallback(refreshShelf);
+  setShowHomeCallback(showHome);
+  setOpenBookCallback(showReader);
   showHome();
   getUserInfo(function (userInfo) {
     showUserInfo(userInfo);

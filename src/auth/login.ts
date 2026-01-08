@@ -98,3 +98,4 @@ export function logout(): void {
 	removeCookie('jwt_token')
 	location.reload()
 }
+

@@ -143,3 +143,4 @@ export function getScreenDPC(): number[] {
 export var globalDpc = getScreenDPC();
 export var globalDpcX = globalDpc[0];
 export var globalDpcY = globalDpc[1];
+

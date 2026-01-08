@@ -132,3 +132,4 @@ export function showRegisterModal(): void {
 
 	showModal($content, { showClose: true, className: 'register-modal', onEnter: confirm })
 }
+

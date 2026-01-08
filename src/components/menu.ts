@@ -33,3 +33,4 @@ export function showMenu($content: JQuery<HTMLElement>[], className?: string, st
 
 	$app.append($menu)
 }
+
