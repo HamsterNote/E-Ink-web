@@ -110,6 +110,49 @@ export function getEmailCode(
 }
 
 /**
+ * 验证 OAuth 回调中的 JWT 并由服务器设置 HttpOnly Cookie
+ * @param jwt 从 URL 参数中获取的 JWT
+ * @param callback 验证成功回调
+ * @param onError 验证失败回调
+ */
+export function validateOAuthToken(
+  jwt: string,
+  callback: () => void,
+  onError?: (error: string) => void,
+): void {
+  $.ajax({
+    url: "/api/v1/auth/validate-oauth-token",
+    type: "POST",
+    data: JSON.stringify({ token: jwt }),
+    contentType: "application/json",
+    dataType: "json",
+    xhrFields: {
+      withCredentials: true,
+    },
+    success: function (response, status, xhr) {
+      if (xhr.status === 200 && response && response.ok) {
+        callback();
+      } else {
+        if (onError) {
+          onError("Token validation failed");
+        }
+      }
+    },
+    error: function (xhr, status, error) {
+      var errorMsg = "Token validation error";
+      if (xhr.responseJSON && xhr.responseJSON.message) {
+        errorMsg = xhr.responseJSON.message;
+      } else if (error) {
+        errorMsg = String(error);
+      }
+      if (onError) {
+        onError(errorMsg);
+      }
+    },
+  });
+}
+
+/**
  * 用户登录
  * @param email 邮箱
  * @param password 密码

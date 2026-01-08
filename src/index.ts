@@ -1,13 +1,18 @@
 // 注意：保持 ES5 语法（避免 let/const、箭头函数、class 等）
 // TypeScript 仅做类型检查；输出通过 Babel/webpack 降级为 ES5。
 import $ from "jquery";
-import { initAjaxSetup, getUserInfo, setShowLoginModalCallback } from "./api";
+import {
+  initAjaxSetup,
+  getUserInfo,
+  setShowLoginModalCallback,
+  validateOAuthToken,
+} from "./api";
 import { showLoginModal, showUserInfo, setRefreshShelfCallback } from "./auth";
 import { setRegisterRefreshShelfCallback } from "./auth/register";
 import { createShelf, refreshShelf } from "./shelf";
 import { setOpenBookCallback } from "./shelf/book";
 import { createReader, setShowHomeCallback } from "./reader";
-import { getQueryParam, removeQueryParam, setCookie } from "./utils";
+import { getQueryParam, removeQueryParam } from "./utils";
 
 function clearContent(): void {
   var $app = $("#app");
@@ -37,17 +42,47 @@ export function showReader(bookUuid: string): void {
 /**
  * 处理 URL 中的 JWT 参数登录
  * 用于 OAuth 回调场景：外部认证服务将 JWT 通过 URL 参数传回
+ *
  * 安全说明：
- * - JWT 会立即存储到 localStorage 和 Cookie
- * - URL 中的 jwt 参数会被立即移除（通过 replaceState）
- * - 这样可以防止 JWT 泄露到浏览器历史、Referer 头和服务器日志
+ * - JWT 不会存储到 localStorage 或客户端可访问的 Cookie
+ * - JWT 通过安全 POST 请求发送到后端验证，后端会设置 HttpOnly、Secure、SameSite Cookie
+ * - URL 中的 jwt 参数会在发送后立即移除（通过 replaceState）
+ *
+ * replaceState 的限制：
+ * - replaceState 只能修改当前地址栏显示的 URL，无法撤销已发生的传输
+ * - 初始请求时 URL 中的 jwt 参数可能已被记录到：浏览器历史、服务器访问日志、已发送的 Referer 头
+ * - 建议：避免在 URL 中传递敏感令牌，优先使用 POST 回调、短期令牌或服务器端令牌交换
  */
 function handleJwtQueryLogin(): void {
-  var jwtFromQuery = getQueryParam("jwt");
-  if (jwtFromQuery) {
-    localStorage.setItem("jwt_token", jwtFromQuery);
-    setCookie("jwt_token", jwtFromQuery, 30);
-    removeQueryParam("jwt");
+  var jwtFromQuery: string | null = null;
+
+  try {
+    jwtFromQuery = getQueryParam("jwt");
+  } catch (e) {
+    console.error("Failed to read query parameter:", e);
+    return;
+  }
+
+  if (!jwtFromQuery) {
+    return;
+  }
+
+  removeQueryParam("jwt");
+
+  try {
+    validateOAuthToken(
+      jwtFromQuery,
+      function () {
+        window.location.reload();
+      },
+      function (error) {
+        console.error("OAuth token validation failed:", error);
+        alert("登录验证失败，请重试");
+      },
+    );
+  } catch (e) {
+    console.error("Failed to validate OAuth token:", e);
+    alert("登录验证失败，请重试");
   }
 }
 

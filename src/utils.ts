@@ -24,15 +24,48 @@ export function getCookie(name: string): string | null {
  * @param name Cookie 名称
  * @param value Cookie 值
  * @param days 过期天数（可选，默认为会话 Cookie）
+ * @param options 可选配置
+ * @param options.secure 是否仅通过 HTTPS 发送（默认 true，生产环境推荐）
+ * @param options.sameSite SameSite 属性（默认 "Lax"）
+ *
+ * 安全说明：
+ * - HttpOnly 属性无法通过客户端 JavaScript 设置，只能由服务器通过 Set-Cookie 响应头设置。
+ * - 对于敏感令牌（如 JWT），建议通过后端 API 使用 Set-Cookie 响应头设置 HttpOnly Cookie，
+ *   而不是通过客户端 JavaScript 设置。
+ * - 本函数设置的 Cookie 对 JavaScript 可见，不适合存储敏感认证令牌。
  */
-export function setCookie(name: string, value: string, days?: number): void {
+export function setCookie(
+  name: string,
+  value: string,
+  days?: number,
+  options?: { secure?: boolean; sameSite?: "Strict" | "Lax" | "None" },
+): void {
   var expires = "";
   if (days) {
     var date = new Date();
     date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
     expires = "; expires=" + date.toUTCString();
   }
-  document.cookie = name + "=" + value + expires + "; path=/";
+
+  // URL 编码 cookie 值，防止特殊字符破坏 cookie 格式
+  var encodedValue = encodeURIComponent(value);
+
+  // 设置安全属性
+  var secure = options && options.secure !== undefined ? options.secure : true;
+  var sameSite =
+    options && options.sameSite !== undefined ? options.sameSite : "Lax";
+
+  var secureFlag = secure ? "; Secure" : "";
+  var sameSiteFlag = "; SameSite=" + sameSite;
+
+  document.cookie =
+    name +
+    "=" +
+    encodedValue +
+    expires +
+    "; path=/" +
+    secureFlag +
+    sameSiteFlag;
 }
 
 /**
@@ -48,20 +81,31 @@ export function removeCookie(name: string): void {
 /**
  * 获取 URL query 参数值
  * @param name 参数名称
- * @returns 参数值，不存在则返回 null
+ * @returns 参数值；参数存在但值为空返回空字符串；参数不存在返回 null
  */
 export function getQueryParam(name: string): string | null {
   var search = window.location.search;
   if (!search || search.length <= 1) {
     return null;
   }
-  // 去掉开头的 '?'
   var queryString = search.substring(1);
   var params = queryString.split("&");
   for (var i = 0; i < params.length; i++) {
-    var pair = params[i].split("=");
-    if (decodeURIComponent(pair[0]) === name) {
-      return pair.length > 1 ? decodeURIComponent(pair[1]) : "";
+    var param = params[i];
+    var eqIndex = param.indexOf("=");
+    var key: string;
+    var value: string;
+
+    if (eqIndex === -1) {
+      key = decodeURIComponent(param);
+      value = "";
+    } else {
+      key = decodeURIComponent(param.substring(0, eqIndex));
+      value = decodeURIComponent(param.substring(eqIndex + 1));
+    }
+
+    if (key === name) {
+      return value;
     }
   }
   return null;
@@ -73,28 +117,29 @@ export function getQueryParam(name: string): string | null {
  * @param name 要移除的参数名称
  */
 export function removeQueryParam(name: string): void {
-  var url = window.location.href;
-  var urlParts = url.split("?");
-  if (urlParts.length < 2) {
+  var search = window.location.search;
+  var hash = window.location.hash;
+  var baseUrl =
+    window.location.protocol +
+    "//" +
+    window.location.host +
+    window.location.pathname;
+
+  if (!search || search.length <= 1) {
     return;
   }
 
-  var baseUrl = urlParts[0];
-  var queryString = urlParts[1];
-  // 处理 hash
-  var hashIndex = queryString.indexOf("#");
-  var hash = "";
-  if (hashIndex !== -1) {
-    hash = queryString.substring(hashIndex);
-    queryString = queryString.substring(0, hashIndex);
-  }
-
+  var queryString = search.substring(1);
   var params = queryString.split("&");
   var newParams: string[] = [];
+
   for (var i = 0; i < params.length; i++) {
-    var pair = params[i].split("=");
-    if (decodeURIComponent(pair[0]) !== name) {
-      newParams.push(params[i]);
+    var param = params[i];
+    var eqIndex = param.indexOf("=");
+    var key = eqIndex === -1 ? param : param.substring(0, eqIndex);
+
+    if (decodeURIComponent(key) !== name) {
+      newParams.push(param);
     }
   }
 
@@ -104,11 +149,13 @@ export function removeQueryParam(name: string): void {
   }
   newUrl += hash;
 
-  // 优先使用 replaceState（不刷新页面），旧浏览器降级为 location.replace
-  if (window.history && window.history.replaceState) {
-    window.history.replaceState({}, document.title, newUrl);
+  if (window.history && typeof window.history.replaceState === "function") {
+    try {
+      window.history.replaceState({}, document.title, newUrl);
+    } catch (e) {
+      window.location.replace(newUrl);
+    }
   } else {
-    // IE9 及以下不支持 replaceState，降级为页面跳转
     window.location.replace(newUrl);
   }
 }
@@ -143,4 +190,3 @@ export function getScreenDPC(): number[] {
 export var globalDpc = getScreenDPC();
 export var globalDpcX = globalDpc[0];
 export var globalDpcY = globalDpc[1];
-
