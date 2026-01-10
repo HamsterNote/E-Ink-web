@@ -8,6 +8,15 @@
 export type InteractionZone = "top" | "bottom" | "left" | "right";
 
 /**
+ * jQuery 鼠标事件接口
+ * 扩展 jQuery.Event 类型以包含 pageX 和 pageY 属性
+ */
+export interface JQueryMouseEvent extends JQuery.Event {
+  pageX: number;
+  pageY: number;
+}
+
+/**
  * 章节信息接口
  * 表示书籍中的一个章节
  */
