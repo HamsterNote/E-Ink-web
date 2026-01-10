@@ -1,13 +1,19 @@
 // 注意：保持 ES5 语法（避免 let/const、箭头函数、class 等）
 // TypeScript 仅做类型检查；输出通过 Babel/webpack 降级为 ES5。
 import $ from "jquery";
-import { initAjaxSetup, getUserInfo, setShowLoginModalCallback } from "./api";
+import {
+  initAjaxSetup,
+  getUserInfo,
+  setShowLoginModalCallback,
+  validateOAuthToken,
+} from "./api";
 import { showLoginModal, showUserInfo, setRefreshShelfCallback } from "./auth";
 import { setRegisterRefreshShelfCallback } from "./auth/register";
+import { clearAuthState } from "./auth/session";
 import { createShelf, refreshShelf } from "./shelf";
 import "./types";
+import { getQueryParam, removeQueryParam } from "./utils";
 
-// 清除所有内容
 function clearContent(): void {
   var $app = $("#app");
   $app.html("");
@@ -28,25 +34,119 @@ function showHome(): void {
   $app.append(createShelf());
 }
 
+/**
+ * 处理 URL 中的 JWT 参数登录
+ * 用于 OAuth 回调场景：外部认证服务将 JWT 通过 URL 参数传回
+ *
+ * 安全说明：
+ * - JWT 不会存储到 localStorage 或客户端可访问的 Cookie
+ * - JWT 通过安全 POST 请求发送到后端验证，后端会设置 HttpOnly、Secure、SameSite Cookie
+ * - URL 中的 jwt 参数会在发送后立即移除（通过 replaceState）
+ *
+ * replaceState 的限制：
+ * - replaceState 只能修改当前地址栏显示的 URL，无法撤销已发生的传输
+ * - 初始请求时 URL 中的 jwt 参数可能已被记录到：浏览器历史、服务器访问日志、已发送的 Referer 头
+ * - 建议：避免在 URL 中传递敏感令牌，优先使用 POST 回调、短期令牌或服务器端令牌交换
+ */
+function handleJwtQueryLogin(): Promise<void> {
+  return new Promise(function (resolve, reject) {
+    var jwtFromQuery: string | null = null;
+
+    try {
+      jwtFromQuery = getQueryParam("jwt");
+    } catch (e) {
+      console.error("Failed to read query parameter:", e);
+      resolve();
+      return;
+    }
+
+    if (!jwtFromQuery) {
+      resolve();
+      return;
+    }
+
+    removeQueryParam("jwt");
+
+    var settled = false;
+    function safeResolve(): void {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    }
+    function safeReject(err: unknown): void {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(err);
+    }
+
+    try {
+      validateOAuthToken(
+        jwtFromQuery,
+        function () {
+          safeResolve();
+        },
+        function (error) {
+          if (settled) {
+            return;
+          }
+          console.error("OAuth token validation failed:", error);
+          alert("登录验证失败，请重试");
+          safeReject(error);
+        },
+        {
+          statusCode: {
+            401: function () {
+              showLoginModal(false);
+              safeReject({ status: 401, message: "unauthorized" });
+            },
+          },
+        },
+      );
+    } catch (e) {
+      console.error("Failed to validate OAuth token:", e);
+      alert("登录验证失败，请重试");
+      safeReject(e);
+    }
+  });
+}
+
 window.showHome = showHome;
+
+function handleGetUserInfoError(error: unknown): void {
+  console.error("获取用户信息失败:", error);
+  clearAuthState().then(function () {
+    showLoginModal(false);
+  });
+}
 
 // DOM Ready（使用 jQuery 1.x 风格）
 $(function () {
-  // 初始化 AJAX 设置
-  initAjaxSetup();
+  function bootstrapApp(): void {
+    initAjaxSetup();
+    setShowLoginModalCallback(showLoginModal);
+    setRefreshShelfCallback(refreshShelf);
+    setRegisterRefreshShelfCallback(refreshShelf);
+    showHome();
 
-  // 设置登录模态框回调
-  setShowLoginModalCallback(showLoginModal);
+    // 获取用户信息
+    getUserInfo(function (userInfo) {
+      showUserInfo(userInfo);
+    }, handleGetUserInfoError);
+  }
 
-  // 设置刷新书架回调（用于登录和注册后刷新）
-  setRefreshShelfCallback(refreshShelf);
-  setRegisterRefreshShelfCallback(refreshShelf);
-
-  // 显示主页
-  showHome();
-
-  // 获取用户信息
-  getUserInfo(function (userInfo) {
-    showUserInfo(userInfo);
-  });
+  // 若存在 jwt 参数，需要等待 OAuth 验证完成（Cookie 写入）后再初始化
+  handleJwtQueryLogin().then(
+    function () {
+      bootstrapApp();
+    },
+    function (err) {
+      console.error("JWT 参数登录失败:", err);
+      // 验证失败也需要继续初始化：允许用户手动登录/继续使用
+      bootstrapApp();
+    },
+  );
 });

@@ -34,3 +34,4 @@ export var bookRatio = 1.5
 
 // 每页最多多少个文档：innerHeight / (innerWidth / bookPerRow * bookRatio) * bookPerRow
 export var bookPerPage = Math.ceil(window.innerHeight / (window.innerWidth / bookPerRow * bookRatio) * bookPerRow)
+

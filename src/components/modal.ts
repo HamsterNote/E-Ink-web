@@ -78,3 +78,4 @@ export function showModal(content: JQuery<HTMLElement>, options?: ModalOptions):
 		}
 	})
 }
+

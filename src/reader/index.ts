@@ -21,13 +21,14 @@ import {
 import { renderProgressBar, updateProgress } from "./progress";
 import { renderToolbar, updateBookmarkButton } from "./toolbar";
 import { initInteraction } from "./interaction";
+import { ReaderState } from "./types";
 
 /**
  * 显示阅读器
  * @param bookUuid 书籍唯一标识
  */
 // 用于保存进度订阅者的引用，以便在退出时取消订阅，避免内存泄漏
-var progressObserver: ((state: any) => void) | null = null;
+var progressObserver: ((state: ReaderState) => void) | null = null;
 
 export function showReader(bookUuid: string): void {
   // 清空当前页面内容
@@ -41,16 +42,25 @@ export function showReader(bookUuid: string): void {
   showLoading();
 
   // 获取书籍内容
-  getBookContent(bookUuid)
-    .then(function (response) {
+  getBookContent(
+    bookUuid,
+    function (response) {
       // 隐藏加载提示
       hideLoading();
+
+      // 确保阅读器 UI 已创建（包含 #reader-content-area）
+      if ($("#reader-content-area").length === 0) {
+        createReaderUI();
+      }
 
       // 初始化状态
       initState(bookUuid, response.title, response.content, response.chapters);
 
-      // 创建并渲染阅读器界面
-      createReaderUI();
+      // 创建标题元素（使用 .text() 避免 XSS）
+      var $readerContent = $("#reader-content-area");
+      var $title = $('<div class="reader-title"></div>');
+      $title.text(response.title || "");
+      $readerContent.append($title);
 
       // 计算总页数
       var totalPages = calculateTotalPages(response.content);
@@ -94,8 +104,8 @@ export function showReader(bookUuid: string): void {
       $(document).one("reader-exit", function () {
         exitReader();
       });
-    })
-    .catch(function (error) {
+    },
+    function (error) {
       // 隐藏加载提示
       hideLoading();
 
@@ -105,7 +115,17 @@ export function showReader(bookUuid: string): void {
 
       // 退出阅读器
       exitReader();
-    });
+    },
+  );
+}
+
+// 挂载到全局，便于脚本加载后调用
+if (typeof window !== "undefined") {
+  window.showReader = showReader;
+  if (!window.reader) {
+    window.reader = {};
+  }
+  window.reader.showReader = showReader;
 }
 
 /**

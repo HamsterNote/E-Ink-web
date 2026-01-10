@@ -1,13 +1,42 @@
-# 更新日志
+# 变更日志
 
 本文档记录项目的所有重要变更。
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [UnReleased]
+## [Unreleased]
+
+### 新增
+- **api**: 增加文件夹管理功能，包括创建文件夹、获取文件夹列表、递归删除文件夹
+- **api**: 增加批量删除文件功能
+- **api**: 新增 validateOAuthToken() 函数，用于验证 OAuth 回调中的 JWT
+- **auth**: 增加 JWT 查询参数登录功能，支持 OAuth 回调场景
+- **reader**: 实现阅读器核心功能，支持书籍内容展示和阅读进度管理
+- **reader**: 集成书籍内容 API（从 mock 数据切换到真实 API）
+- **reader**: 实现阅读器与书架的切换功能
+- **shelf**: 书架增强对文件夹的支持，可查看和浏览文件夹结构
+- **shelf**: 增加打开书籍功能，支持从书架跳转到阅读器
+
+### 重构
+- **reader**: 重构 API 模块，对接后端 `/api/v1/files/{uuid}/parsed-texts` 接口
+- **shelf**: 重构书架逻辑，优化文件夹和文件的展示逻辑
+- **shelf**: 重构多选功能，增加文件夹支持
+
+### 代码质量
+- 统一代码缩进格式，使用 2 空格缩进
+- 统一字符串引号风格（双引号）
+- 优化代码结构，提升可读性
+
+### 安全
+- **auth**: 改进 JWT 处理安全性，通过后端验证并设置 HttpOnly Cookie，不再将 JWT 存储在客户端可访问位置（localStorage 或 Cookie）
+- **utils**: 增强 Cookie 安全性，添加 Secure 和 SameSite 属性，URL 编码 cookie 值
 
 ### 修复
+- **Security**: 修复多个 XSS 漏洞：src/reader/index.ts、src/shelf/book.ts、src/shelf/directory.ts 中使用 .text() 替代字符串拼接来设置用户输入内容
+- **Security**: 修复 src/shelf/index.ts 中重复加载目录的问题，避免数据重复和潜在的安全问题
+- **Bug**: 修复 src/shelf/multiSelect.ts 中多选底部栏按钮问题：修正删除按钮的 CSS 类名，添加剪切和粘贴按钮并正确显示
+- **Major**: 修复 `index.ts` 中 `getUserInfo` 缺少错误处理的问题，添加错误回调处理认证失败场景（清除令牌并显示登录模态框）
 - **Major**: 修复目录交互问题，添加键盘导航支持（tabindex 和 Enter/Space 键事件）
 - **Major**: 添加 `.toc-item:focus` 规则为触控/键盘用户提供视觉反馈（符合 CSS2.1 规范）
 - **Major**: 修复章节索引递增时机错误，将 chapterIndex 递增移到页面推入数组之前
@@ -31,6 +60,8 @@
 - **Major**: 修复 `reader/state.ts` 中设置 falsy 值检查（使用 typeof 替代 ||）
 - **Major**: 修复 `reader/state.ts` 中书签数组直接变更问题（使用不可变方式更新）
 - **Minor**: 为 `.toc-item` 添加 `:active` 状态（电子墨水屏不支持 hover）
+- **Minor**: 修复 getQueryParam 参数解析逻辑，正确处理包含 "=" 的值和空值
+- **Minor**: 修复 removeQueryParam URL 移除逻辑，使用标准 API 替代手动分割，为不支持 replaceState 的浏览器添加降级方案
 - **Nitpick**: 扩展 Window 接口以获得类型安全
 - **Nitpick**: 在 `showHome` 不可用时添加错误日志
 - **Nitpick**: 验证加载的阅读设置结构，提供默认值

@@ -106,3 +106,4 @@ export function showResetPasswordModal(): void {
 
 	showModal($content, { showClose: true, className: 'reset-password-modal', onEnter: confirm })
 }
+

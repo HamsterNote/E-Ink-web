@@ -4,10 +4,13 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 /** @type {import('webpack').Configuration} */
 module.exports = {
   mode: 'development',
-  entry: path.resolve(__dirname, 'src/index.ts'),
+  entry: {
+    bundle: path.resolve(__dirname, 'src/index.ts'),
+    reader: path.resolve(__dirname, 'src/reader/index.ts')
+  },
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.js',
+    filename: '[name].js',
     clean: true,
     // 将打包结果包裹为 IIFE，避免旧版 WebKit 对于顶层 this/模块语义的兼容性问题
     iife: true,
