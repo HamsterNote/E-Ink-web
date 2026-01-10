@@ -118,8 +118,9 @@ export function validateOAuthToken(
   jwt: string,
   callback: () => void,
   onError?: (error: string) => void,
+  options?: { statusCode?: JQueryAjaxSettings["statusCode"] },
 ): void {
-  $.ajax({
+  var ajaxOptions: JQueryAjaxSettings = {
     url: "/api/v1/auth/validate-oauth-token",
     type: "POST",
     data: JSON.stringify({ token: jwt }),
@@ -148,6 +149,35 @@ export function validateOAuthToken(
         onError(errorMsg);
       }
     },
+  };
+
+  if (options && options.statusCode) {
+    ajaxOptions.statusCode = options.statusCode;
+  }
+
+  $.ajax(ajaxOptions);
+}
+
+/**
+ * 通知后端清理认证状态（用于 HttpOnly Cookie 退出）
+ * @returns Promise<void>
+ */
+export function logoutSession(): Promise<void> {
+  return new Promise(function (resolve, reject) {
+    $.ajax({
+      url: "/api/v1/auth/logout",
+      type: "POST",
+      dataType: "json",
+      xhrFields: {
+        withCredentials: true,
+      },
+      success: function () {
+        resolve();
+      },
+      error: function (xhr, status, error) {
+        reject(error || { message: "logout error", status: status });
+      },
+    });
   });
 }
 
@@ -596,45 +626,39 @@ export function deleteFolderRecursive(folderUuid: string): Promise<void> {
   var defaultPageSize = 100;
 
   /**
-   * 分页获取文件夹内所有文件
+   * 分页删除文件夹内的文件
    * @param parentDir 父目录
+   * @param page 当前页
    * @param pageSize 每页数量
-   * @returns Promise<string[]> 所有文件的 UUID 数组
+   * @returns Promise<void>
    */
-  function fetchAllFiles(
+  function deleteAllFilesInFolder(
     parentDir: Directory,
+    page: number,
     pageSize: number,
-  ): Promise<string[]> {
-    return getFileList(parentDir, 0, pageSize).then(function (firstPage) {
-      var allUuids: string[] = [];
-
-      // 收集第一页的文件 UUID
-      for (var i = 0; i < firstPage.items.length; i++) {
-        if (firstPage.items[i].uuid) {
-          allUuids.push(firstPage.items[i].uuid);
+  ): Promise<void> {
+    return getFileList(parentDir, page, pageSize).then(function (pageRes) {
+      var fileUuids: string[] = [];
+      for (var i = 0; i < pageRes.items.length; i++) {
+        if (pageRes.items[i].uuid) {
+          fileUuids.push(pageRes.items[i].uuid);
         }
       }
 
-      // 计算总页数并获取剩余页面的文件
-      var totalPages = Math.ceil(firstPage.total / pageSize);
-      var pagePromises: Promise<void>[] = [];
+      var deletePromise: Promise<void> = fileUuids.length
+        ? batchDeleteFiles(fileUuids).then(function () {
+            return;
+          })
+        : Promise.resolve();
 
-      for (var page = 1; page < totalPages; page++) {
-        (function (p) {
-          pagePromises.push(
-            getFileList(parentDir, p, pageSize).then(function (pageRes) {
-              for (var j = 0; j < pageRes.items.length; j++) {
-                if (pageRes.items[j].uuid) {
-                  allUuids.push(pageRes.items[j].uuid);
-                }
-              }
-            }),
-          );
-        })(page);
-      }
-
-      return Promise.all(pagePromises).then(function () {
-        return allUuids;
+      return deletePromise.then(function () {
+        var nextOffset = (page + 1) * pageSize;
+        var hasMore =
+          pageRes.items.length > 0 && nextOffset < pageRes.total;
+        if (hasMore) {
+          return deleteAllFilesInFolder(parentDir, page + 1, pageSize);
+        }
+        return;
       });
     });
   }
@@ -657,18 +681,11 @@ export function deleteFolderRecursive(folderUuid: string): Promise<void> {
           type: "directory",
           parent: undefined,
         };
-        // 3. 分页获取所有文件
-        return fetchAllFiles(parentDir, defaultPageSize);
-      })
-      .then(function (fileUuids) {
-        // 4. 批量删除所有文件
-        if (fileUuids.length > 0) {
-          return batchDeleteFiles(fileUuids);
-        }
-        return Promise.resolve(null);
+        // 3. 分页删除所有文件
+        return deleteAllFilesInFolder(parentDir, 0, defaultPageSize);
       })
       .then(function () {
-        // 5. 最后删除文件夹本身
+        // 4. 最后删除文件夹本身
         return deleteFolder(folderUuid);
       })
       .then(function () {

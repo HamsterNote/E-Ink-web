@@ -173,13 +173,10 @@ export function refreshShelf(): void {
       loadedDirectory.push(currentShelfDirectory);
       renderShelf($shelf, pageSize);
     });
-  } else {
-    // 仅在目录不在已加载列表中时才添加，避免重复
-    if (indexOfLoaded === -1) {
-      loadedDirectory.push(currentShelfDirectory);
-    }
-    renderShelf($shelf, pageSize);
+    return;
   }
+
+  renderShelf($shelf, pageSize);
 }
 
 /**
@@ -313,31 +310,44 @@ function showUploadModal(): void {
   var $uploadButton = $('<div class="upload-button"></div>');
   var $uploadInput = $('<input class="upload-input" type="file" />');
   $uploadButton.append($uploadInput);
+  var $fileName = $('<input class="ink-input" placeholder="文件名（选填）" />');
+  var fileSelected: File | null = null;
   $uploadInput.on("change", function () {
     var inputElement = $uploadInput[0] as HTMLInputElement;
     var file: File | undefined = inputElement.files
       ? inputElement.files[0]
       : undefined;
     if (file) {
-      uploadFile(
-        file,
-        function (percent) {
-          console.log(percent);
-        },
-        function () {
-          console.log("complete");
-        },
-        function () {
-          console.log("error");
-        },
-      );
+      fileSelected = file;
+      if (!($fileName.val() as string)) {
+        $fileName.val(file.name);
+      }
+    } else {
+      fileSelected = null;
     }
-    console.log("文件选择", $uploadButton.val());
   });
   $content.append($uploadButton);
-  var $fileName = $('<input class="ink-input" placeholder="文件名（选填）" />');
   $content.append($fileName);
   var $submitButton = $('<button class="ink-button">上传</button>');
+  $submitButton.click(function () {
+    var selectedFile = fileSelected;
+    if (!selectedFile) {
+      alert("请选择要上传的文件");
+      return;
+    }
+    uploadFile(
+      selectedFile,
+      function (percent) {
+        console.log(percent);
+      },
+      function () {
+        console.log("complete");
+      },
+      function () {
+        console.log("error");
+      },
+    );
+  });
   $content.append($submitButton);
   showModal($content, { showClose: true });
 }

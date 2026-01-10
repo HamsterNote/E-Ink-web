@@ -9,6 +9,7 @@ import {
 } from "./api";
 import { showLoginModal, showUserInfo, setRefreshShelfCallback } from "./auth";
 import { setRegisterRefreshShelfCallback } from "./auth/register";
+import { clearAuthState } from "./auth/session";
 import { createShelf, refreshShelf } from "./shelf";
 import "./types";
 import { getQueryParam, removeQueryParam } from "./utils";
@@ -73,6 +74,13 @@ function handleJwtQueryLogin(): void {
         console.error("OAuth token validation failed:", error);
         alert("登录验证失败，请重试");
       },
+      {
+        statusCode: {
+          401: function () {
+            showLoginModal(false);
+          },
+        },
+      },
     );
   } catch (e) {
     console.error("Failed to validate OAuth token:", e);
@@ -81,17 +89,6 @@ function handleJwtQueryLogin(): void {
 }
 
 window.showHome = showHome;
-
-function clearAuthState(): void {
-  localStorage.removeItem("jwt_token");
-  var cookies = document.cookie.split(";");
-  for (var i = 0; i < cookies.length; i++) {
-    var cookie = cookies[i];
-    var eqPos = cookie.indexOf("=");
-    var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
-  }
-}
 
 function handleGetUserInfoError(error: unknown): void {
   console.error("获取用户信息失败:", error);

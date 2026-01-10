@@ -11,7 +11,7 @@ import {
   addBookmark as stateAddBookmark,
   removeBookmark as stateRemoveBookmark,
 } from "./state";
-import { getCookie } from "../utils";
+import { clearAuthState } from "../auth/session";
 
 interface ParsedTextItem {
   id: string;
@@ -28,15 +28,17 @@ interface ParseDocumentResponse {
 
 export function getBookContent(bookUuid: string): Promise<BookContentResponse> {
   return new Promise(function (resolve, reject) {
-    var token =
-      localStorage.getItem("jwt_token") || getCookie("jwt_token") || "";
-
     $.ajax({
       type: "GET",
       url: "/api/v1/files/" + encodeURIComponent(bookUuid) + "/parsed-texts",
       dataType: "json",
-      headers: {
-        Authorization: "Bearer " + token,
+      xhrFields: {
+        withCredentials: true,
+      },
+      statusCode: {
+        401: function () {
+          clearAuthState();
+        },
       },
       success: function (response: ParseDocumentResponse) {
         var htmlContent = buildHtmlContent(response.items);
@@ -60,9 +62,16 @@ export function getBookContent(bookUuid: string): Promise<BookContentResponse> {
 function buildHtmlContent(items: ParsedTextItem[]): string {
   var html = '<div class="book-content">';
   var currentPage = -1;
+  var sortedItems = items.slice().sort(function (a, b) {
+    var pageDiff = a.pageNumber - b.pageNumber;
+    if (pageDiff !== 0) {
+      return pageDiff;
+    }
+    return getItemSortId(a) - getItemSortId(b);
+  });
 
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
+  for (var i = 0; i < sortedItems.length; i++) {
+    var item = sortedItems[i];
     if (item.pageNumber !== currentPage) {
       if (currentPage !== -1) {
         html += "</div>";
@@ -79,6 +88,15 @@ function buildHtmlContent(items: ParsedTextItem[]): string {
 
   html += "</div>";
   return html;
+}
+
+function getItemSortId(item: ParsedTextItem): number {
+  var rawId = item.id || item.pageId || "0";
+  var parsedId = parseInt(String(rawId), 10);
+  if (isNaN(parsedId)) {
+    return 0;
+  }
+  return parsedId;
 }
 
 function escapeHtml(text: string): string {

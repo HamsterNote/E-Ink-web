@@ -111,6 +111,15 @@ export function showReader(bookUuid: string): void {
     });
 }
 
+// 挂载到全局，便于脚本加载后调用
+if (typeof window !== "undefined") {
+  window.showReader = showReader;
+  if (!window.reader) {
+    window.reader = {};
+  }
+  window.reader.showReader = showReader;
+}
+
 /**
  * 创建阅读器 UI
  */

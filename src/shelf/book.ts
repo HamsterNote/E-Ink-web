@@ -4,6 +4,40 @@ import $ from "jquery";
 import { BookFile } from "../types";
 import { isMultiSelect } from "./multiSelect";
 
+var readerScriptLoading = false;
+var readerScriptCallbacks: Array<
+  (showReaderFn: (bookUuid: string) => void) => void
+> = [];
+var readerScriptUrl = "reader.js";
+
+function getShowReaderFromWindow(): ((bookUuid: string) => void) | null {
+  if (window.showReader && typeof window.showReader === "function") {
+    return window.showReader;
+  }
+  if (
+    window.reader &&
+    typeof window.reader.showReader === "function"
+  ) {
+    return window.reader.showReader;
+  }
+  return null;
+}
+
+function flushReaderCallbacks(
+  showReaderFn: (bookUuid: string) => void,
+): void {
+  for (var i = 0; i < readerScriptCallbacks.length; i++) {
+    readerScriptCallbacks[i](showReaderFn);
+  }
+  readerScriptCallbacks = [];
+}
+
+function handleReaderScriptError(error: unknown): void {
+  console.error("加载阅读器脚本失败:", error);
+  alert("打开阅读器失败");
+  readerScriptCallbacks = [];
+}
+
 export function createBook(
   book: BookFile,
   bookItem?: JQuery<HTMLElement>,
@@ -26,12 +60,16 @@ export function createBook(
   if (!bookItem) {
     // 第一次创建才添加事件避免重复绑定
     $bookItem.click(function () {
+      var $currentItem = $(this);
       if (isMultiSelect()) {
         // 多选模式：切换选中状态
-        $bookItem.toggleClass("active");
+        $currentItem.toggleClass("active");
       } else {
         // 普通模式：点击书籍封面打开阅读器
-        openReader(book.uuid);
+        var currentUuid = $currentItem.attr("uuid");
+        if (currentUuid) {
+          openReader(currentUuid);
+        }
       }
     });
   }
@@ -43,16 +81,51 @@ export function createBook(
  * @param bookUuid 书籍唯一标识
  */
 function openReader(bookUuid: string): void {
-  // 动态导入阅读器模块，避免循环依赖
-  import("../reader/index")
-    .then(function (module) {
-      var showReader = module.showReader;
-      if (typeof showReader === "function") {
-        showReader(bookUuid);
-      }
-    })
-    .catch(function (error) {
-      console.error("加载阅读器模块失败:", error);
-      alert("打开阅读器失败");
-    });
+  var showReader = getShowReaderFromWindow();
+  if (showReader) {
+    showReader(bookUuid);
+    return;
+  }
+
+  readerScriptCallbacks.push(function (showReaderFn) {
+    showReaderFn(bookUuid);
+  });
+
+  if (readerScriptLoading) {
+    return;
+  }
+
+  readerScriptLoading = true;
+
+  var script = document.createElement("script");
+  script.type = "text/javascript";
+  script.src = readerScriptUrl;
+  script.onload = function () {
+    readerScriptLoading = false;
+    var loadedShowReader = getShowReaderFromWindow();
+    if (loadedShowReader) {
+      flushReaderCallbacks(loadedShowReader);
+    } else {
+      handleReaderScriptError("reader entry not found");
+    }
+    if (script.parentNode) {
+      script.parentNode.removeChild(script);
+    }
+  };
+  script.onerror = function (error) {
+    readerScriptLoading = false;
+    handleReaderScriptError(error);
+    if (script.parentNode) {
+      script.parentNode.removeChild(script);
+    }
+  };
+
+  var container =
+    document.body || document.getElementsByTagName("head")[0];
+  if (container) {
+    container.appendChild(script);
+  } else {
+    readerScriptLoading = false;
+    handleReaderScriptError("script container missing");
+  }
 }

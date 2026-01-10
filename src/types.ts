@@ -41,5 +41,9 @@ export interface UserInfo {
 declare global {
   interface Window {
     showHome: () => void;
+    showReader?: (bookUuid: string) => void;
+    reader?: {
+      showReader?: (bookUuid: string) => void;
+    };
   }
 }
