@@ -14,7 +14,8 @@ export function createBook(
   var $cover = $(
     '<div class="book-cover"><img class="book-cover-image" src=""/></div>',
   );
-  var $name = $('<span class="book-name">' + book.originalFilename + "</span>");
+  var $name = $('<span class="book-name"></span>');
+  $name.text(book.originalFilename || "");
   $bookItem.append($cover);
   $bookItem.append($name);
   $bookItem.attr("page", String(book.page));

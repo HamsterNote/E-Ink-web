@@ -49,8 +49,11 @@ export function showReader(bookUuid: string): void {
       // 初始化状态
       initState(bookUuid, response.title, response.content, response.chapters);
 
-      // 创建并渲染阅读器界面
-      createReaderUI();
+      // 创建标题元素（使用 .text() 避免 XSS）
+      var $readerContent = $("#reader-content-area");
+      var $title = $('<div class="reader-title"></div>');
+      $title.text(response.title || "");
+      $readerContent.append($title);
 
       // 计算总页数
       var totalPages = calculateTotalPages(response.content);

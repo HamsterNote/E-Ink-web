@@ -174,7 +174,10 @@ export function refreshShelf(): void {
       renderShelf($shelf, pageSize);
     });
   } else {
-    loadedDirectory.push(currentShelfDirectory);
+    // 仅在目录不在已加载列表中时才添加，避免重复
+    if (indexOfLoaded === -1) {
+      loadedDirectory.push(currentShelfDirectory);
+    }
     renderShelf($shelf, pageSize);
   }
 }
@@ -199,14 +202,6 @@ function renderShelf($shelf: JQuery<HTMLElement>, pageSize: number): void {
     } else {
       var directoryItem = createDirectory(bookOrDirectory);
       $shelfContent.append(directoryItem);
-      // 使用闭包保存 directory 引用
-      (function (dir) {
-        directoryItem.click(function () {
-          currentShelfDirectory = dir;
-          console.log(currentShelfDirectory);
-          refreshShelf();
-        });
-      })(bookOrDirectory);
     }
   }
 

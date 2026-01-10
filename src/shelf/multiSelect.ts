@@ -57,10 +57,12 @@ function createMultiSelectBottomBar(): void {
   var $quitBtn = $('<div class="bottom-bar-btn quit-btn">退出多选</div>');
   var $cutBtn = $('<div class="bottom-bar-btn cut-btn">剪切</div>');
   var $pasteBtn = $('<div class="bottom-bar-btn paste-btn">粘贴</div>');
-  var $deleteBtn = $('<div class="bottom-bar-btn paste-btn">删除</div>');
+  var $deleteBtn = $('<div class="bottom-bar-btn delete-btn">删除</div>');
 
   $quitBtn.click(switchMultiSelect);
   $multiSelectBottomBar.append($quitBtn);
+  $multiSelectBottomBar.append($cutBtn);
+  $multiSelectBottomBar.append($pasteBtn);
   $multiSelectBottomBar.append($deleteBtn);
   $deleteBtn.click(function () {
     deleteBookOrDirectory(getSelected());

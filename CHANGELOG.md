@@ -33,6 +33,9 @@
 - **utils**: 增强 Cookie 安全性，添加 Secure 和 SameSite 属性，URL 编码 cookie 值
 
 ### 修复
+- **Security**: 修复多个 XSS 漏洞：src/reader/index.ts、src/shelf/book.ts、src/shelf/directory.ts 中使用 .text() 替代字符串拼接来设置用户输入内容
+- **Security**: 修复 src/shelf/index.ts 中重复加载目录的问题，避免数据重复和潜在的安全问题
+- **Bug**: 修复 src/shelf/multiSelect.ts 中多选底部栏按钮问题：修正删除按钮的 CSS 类名，添加剪切和粘贴按钮并正确显示
 - **Major**: 修复 `index.ts` 中 `getUserInfo` 缺少错误处理的问题，添加错误回调处理认证失败场景（清除令牌并显示登录模态框）
 - **Major**: 修复目录交互问题，添加键盘导航支持（tabindex 和 Enter/Space 键事件）
 - **Major**: 添加 `.toc-item:focus` 规则为触控/键盘用户提供视觉反馈（符合 CSS2.1 规范）

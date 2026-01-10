@@ -12,7 +12,8 @@ export function createDirectory(directory: Directory): JQuery<HTMLElement> {
       directoryIcon +
       '"/></div>',
   );
-  var $name = $('<span class="book-name">' + directory.name + "</span>");
+  var $name = $('<span class="book-name"></span>');
+  $name.text(directory.name || "");
   $result.append($cover);
   $result.append($name);
   $result.attr("uuid", directory.uuid);
