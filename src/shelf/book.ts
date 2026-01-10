@@ -4,14 +4,6 @@ import $ from "jquery";
 import { BookFile } from "../types";
 import { isMultiSelect } from "./multiSelect";
 
-var openBookCallback: ((bookUuid: string) => void) | null = null;
-
-export function setOpenBookCallback(
-  callback: (bookUuid: string) => void,
-): void {
-  openBookCallback = callback;
-}
-
 export function createBook(
   book: BookFile,
   bookItem?: JQuery<HTMLElement>,
@@ -31,16 +23,35 @@ export function createBook(
   $bookItem.attr("data-type", "file");
 
   if (!bookItem) {
+    // 第一次创建才添加事件避免重复绑定
     $bookItem.click(function () {
       if (isMultiSelect()) {
+        // 多选模式：切换选中状态
         $bookItem.toggleClass("active");
       } else {
-        var uuid = $bookItem.attr("uuid");
-        if (uuid && openBookCallback) {
-          openBookCallback(uuid);
-        }
+        // 普通模式：点击书籍封面打开阅读器
+        openReader(book.uuid);
       }
     });
   }
   return $bookItem;
+}
+
+/**
+ * 打开阅读器
+ * @param bookUuid 书籍唯一标识
+ */
+function openReader(bookUuid: string): void {
+  // 动态导入阅读器模块，避免循环依赖
+  import("../reader/index")
+    .then(function (module) {
+      var showReader = module.showReader;
+      if (typeof showReader === "function") {
+        showReader(bookUuid);
+      }
+    })
+    .catch(function (error) {
+      console.error("加载阅读器模块失败:", error);
+      alert("打开阅读器失败");
+    });
 }

@@ -1,155 +1,200 @@
 // 注意：保持 ES5 语法（避免 let/const、箭头函数、class 等）
 // TypeScript 仅做类型检查；输出通过 Babel/webpack 降级为 ES5。
+
 import $ from "jquery";
+import {
+  initState,
+  getState,
+  clearState,
+  subscribe,
+  unsubscribe,
+  saveProgress,
+  updateState,
+} from "./state";
 import { getBookContent } from "./api";
-import { initState, getState, updateState, saveProgress } from "./state";
-import { refreshScreen } from "../common";
+import {
+  renderPage,
+  calculateTotalPages,
+  splitContentIntoPages,
+  clearPageCache,
+} from "./renderer";
+import { renderProgressBar, updateProgress } from "./progress";
+import { renderToolbar, updateBookmarkButton } from "./toolbar";
+import { initInteraction } from "./interaction";
 
-var showHomeCallback: (() => void) | null = null;
+/**
+ * 显示阅读器
+ * @param bookUuid 书籍唯一标识
+ */
+// 用于保存进度订阅者的引用，以便在退出时取消订阅，避免内存泄漏
+var progressObserver: ((state: any) => void) | null = null;
 
-export function setShowHomeCallback(callback: () => void): void {
-  showHomeCallback = callback;
-}
+export function showReader(bookUuid: string): void {
+  // 清空当前页面内容
+  clearContent();
 
-export function createReader(bookUuid: string): JQuery<HTMLElement> {
+  // 创建阅读器容器
   var $reader = $('<div id="reader"></div>');
-  var $readerContent = $('<div class="reader-content"></div>');
-  var $loading = $('<div class="reader-loading">加载中...</div>');
+  $("#app").append($reader);
 
-  $reader.append($loading);
+  // 显示加载提示
+  showLoading();
 
+  // 获取书籍内容
   getBookContent(bookUuid)
     .then(function (response) {
-      $loading.remove();
+      // 隐藏加载提示
+      hideLoading();
+
+      // 初始化状态
       initState(bookUuid, response.title, response.content, response.chapters);
 
-      var $title = $('<div class="reader-title">' + response.title + "</div>");
-      $readerContent.append($title);
+      // 创建并渲染阅读器界面
+      createReaderUI();
 
-      var $contentArea = $('<div class="reader-text"></div>');
-      $contentArea.html(response.content);
-      $readerContent.append($contentArea);
+      // 计算总页数
+      var totalPages = calculateTotalPages(response.content);
+      var state = getState();
+      if (state) {
+        // 使用 updateState 更新总页数，触发观察者通知
+        updateState({ totalPages: totalPages });
+        state = getState();
 
-      $reader.append($readerContent);
-      $reader.append(createReaderBottomBar());
+        if (state) {
+          // 验证并 clamp currentPage，确保不超出范围
+          var restoredPage = state.currentPage;
+          if (restoredPage < 0 || restoredPage >= totalPages) {
+            state.currentPage = Math.max(
+              0,
+              Math.min(restoredPage, totalPages - 1),
+            );
+          }
 
-      setupTouchNavigation($reader, $contentArea);
+          // 渲染当前页
+          renderPage(state.currentPage);
+
+          // 更新进度条
+          updateProgress(state.currentPage, state.totalPages);
+
+          // 更新书签按钮状态
+          var hasBookmarkInCurrentPage =
+            state.bookmarks.indexOf(state.currentPage) !== -1;
+          updateBookmarkButton(hasBookmarkInCurrentPage);
+        }
+      }
+
+      // 订阅状态变化（保存引用以便退出时取消订阅，避免内存泄漏）
+      progressObserver = function (state) {
+        // 状态变化时自动保存进度
+        saveProgress();
+      };
+      subscribe(progressObserver);
+
+      // 绑定退出事件
+      $(document).one("reader-exit", function () {
+        exitReader();
+      });
     })
-    .catch(function (err) {
-      $loading.text("加载失败: " + (err.message || err));
-      console.error("加载书籍内容失败:", err);
+    .catch(function (error) {
+      // 隐藏加载提示
+      hideLoading();
+
+      // 显示错误提示
+      console.error("加载书籍失败:", error);
+      alert("加载书籍失败，请重试");
+
+      // 退出阅读器
+      exitReader();
     });
-
-  return $reader;
 }
 
-function createReaderBottomBar(): JQuery<HTMLElement> {
-  var $bottomBar = $('<div class="reader-bottom-bar"></div>');
-  var $backBtn = $('<div class="bottom-bar-btn">返回</div>');
-  var $refreshBtn = $('<div class="bottom-bar-btn">刷屏</div>');
-  var $settingsBtn = $('<div class="bottom-bar-btn">设置</div>');
+/**
+ * 创建阅读器 UI
+ */
+function createReaderUI(): void {
+  var $reader = $("#reader");
+  if ($reader.length === 0) {
+    return;
+  }
 
-  $backBtn.click(function () {
-    saveProgress();
-    if (showHomeCallback) {
-      showHomeCallback();
+  // 创建内容区域
+  var $contentArea = $('<div id="reader-content-area"></div>');
+  $reader.append($contentArea);
+
+  // 创建进度条
+  var $progressBar = renderProgressBar();
+  $reader.append($progressBar);
+
+  // 创建功能栏
+  var $toolbar = renderToolbar();
+  $reader.append($toolbar);
+
+  // 初始化交互
+  initInteraction();
+}
+
+/**
+ * 清空页面内容
+ */
+function clearContent(): void {
+  $("#app").empty();
+}
+
+/**
+ * 显示加载提示
+ */
+function showLoading(): void {
+  var $loading = $('<div class="loading">正在加载书籍...</div>');
+  $("#app").append($loading);
+}
+
+/**
+ * 隐藏加载提示
+ */
+function hideLoading(): void {
+  $(".loading").remove();
+}
+
+/**
+ * 退出阅读器，返回书架
+ */
+export function exitReader(): void {
+  // 取消订阅，避免内存泄漏
+  if (progressObserver) {
+    unsubscribe(progressObserver);
+    progressObserver = null;
+  }
+
+  // 清理状态
+  clearState();
+
+  // 清除分页缓存
+  clearPageCache();
+
+  // 移除阅读器容器
+  $("#reader").remove();
+
+  // 触发返回书架事件
+  $(document).trigger("reader-back-to-shelf");
+}
+
+/**
+ * 初始化阅读器模块
+ * 这个函数在应用启动时调用
+ */
+export function initReaderModule(): void {
+  // 监听返回书架事件
+  $(document).on("reader-back-to-shelf", function () {
+    var showHome = window.showHome;
+    if (typeof showHome === "function") {
+      showHome();
+    } else {
+      console.error("showHome 函数未注册，无法返回书架");
     }
   });
-
-  $refreshBtn.click(function () {
-    refreshScreen();
-  });
-
-  $settingsBtn.click(function () {
-    showReaderSettings();
-  });
-
-  $bottomBar.append($backBtn);
-  $bottomBar.append($refreshBtn);
-  $bottomBar.append($settingsBtn);
-
-  return $bottomBar;
 }
 
-function setupTouchNavigation(
-  $reader: JQuery<HTMLElement>,
-  $contentArea: JQuery<HTMLElement>,
-): void {
-  var contentEl = $contentArea[0];
-  if (!contentEl) return;
-
-  var startY = 0;
-  var scrollTop = 0;
-
-  $contentArea.on("touchstart", function (e) {
-    var touch = (e.originalEvent as TouchEvent).touches[0];
-    startY = touch.clientY;
-    scrollTop = contentEl.scrollTop;
-  });
-
-  $contentArea.on("touchmove", function (e) {
-    var touch = (e.originalEvent as TouchEvent).touches[0];
-    var deltaY = startY - touch.clientY;
-    contentEl.scrollTop = scrollTop + deltaY;
-  });
-}
-
-function showReaderSettings(): void {
-  var state = getState();
-  if (!state) return;
-
-  var $overlay = $('<div class="reader-settings-overlay"></div>');
-  var $panel = $('<div class="reader-settings-panel"></div>');
-
-  var $fontSizeRow = $('<div class="settings-row"></div>');
-  $fontSizeRow.append('<span class="settings-label">字体大小</span>');
-
-  var $fontSmaller = $('<button class="settings-btn">A-</button>');
-  var $fontLarger = $('<button class="settings-btn">A+</button>');
-  var $fontSizeValue = $(
-    '<span class="settings-value">' + state.fontSize + "mm</span>",
-  );
-
-  $fontSmaller.click(function () {
-    var current = getState();
-    if (current && current.fontSize > 2) {
-      updateState({ fontSize: current.fontSize - 0.5 });
-      $fontSizeValue.text(current.fontSize - 0.5 + "mm");
-      applyFontSize(current.fontSize - 0.5);
-    }
-  });
-
-  $fontLarger.click(function () {
-    var current = getState();
-    if (current && current.fontSize < 10) {
-      updateState({ fontSize: current.fontSize + 0.5 });
-      $fontSizeValue.text(current.fontSize + 0.5 + "mm");
-      applyFontSize(current.fontSize + 0.5);
-    }
-  });
-
-  $fontSizeRow.append($fontSmaller);
-  $fontSizeRow.append($fontSizeValue);
-  $fontSizeRow.append($fontLarger);
-
-  var $closeBtn = $('<button class="settings-close-btn">关闭</button>');
-  $closeBtn.click(function () {
-    $overlay.remove();
-  });
-
-  $panel.append($fontSizeRow);
-  $panel.append($closeBtn);
-  $overlay.append($panel);
-
-  $overlay.click(function (e) {
-    if (e.target === $overlay[0]) {
-      $overlay.remove();
-    }
-  });
-
-  $("#app").append($overlay);
-}
-
-function applyFontSize(size: number): void {
-  $(".reader-text").css("font-size", size + "mm");
-}
+// 自动初始化模块
+$(document).ready(function () {
+  initReaderModule();
+});
