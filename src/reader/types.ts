@@ -5,15 +5,15 @@
  * 交互区域类型
  * 定义阅读器屏幕的四个交互区域
  */
-export type InteractionZone = 'top' | 'bottom' | 'left' | 'right';
+export type InteractionZone = "top" | "bottom" | "left" | "right";
 
 /**
  * jQuery 鼠标事件接口
  * 扩展 jQuery.Event 类型以包含 pageX 和 pageY 属性
  */
 export interface JQueryMouseEvent extends JQuery.Event {
-	pageX: number;
-	pageY: number;
+  pageX: number;
+  pageY: number;
 }
 
 /**
@@ -21,9 +21,9 @@ export interface JQueryMouseEvent extends JQuery.Event {
  * 表示书籍中的一个章节
  */
 export interface Chapter {
-	id: string;        // 章节唯一标识
-	title: string;     // 章节标题
-	index: number;     // 章节索引（从 0 开始）
+  id: string; // 章节唯一标识
+  title: string; // 章节标题
+  index: number; // 章节索引（从 0 开始）
 }
 
 /**
@@ -31,10 +31,10 @@ export interface Chapter {
  * API 返回的书籍数据结构（目前使用 mock 数据）
  */
 export interface BookContentResponse {
-	uuid: string;              // 书籍唯一标识
-	title: string;             // 书籍标题
-	content: string;           // 书籍内容（HTML 格式）
-	chapters?: Chapter[];      // 可选的章节列表
+  uuid: string; // 书籍唯一标识
+  title: string; // 书籍标题
+  content: string; // 书籍内容（HTML 格式）
+  chapters?: Chapter[]; // 可选的章节列表
 }
 
 /**
@@ -42,16 +42,16 @@ export interface BookContentResponse {
  * 管理阅读器的核心状态
  */
 export interface ReaderState {
-	bookId: string;            // 当前书籍 ID
-	bookTitle: string;         // 当前书籍标题
-	currentPage: number;       // 当前页码（从 0 开始）
-	totalPages: number;        // 总页数
-	content: string;           // 完整的书籍内容
-	fontSize: number;          // 字体大小（单位：mm）
-	lineHeight: number;        // 行高（单位：em，倍数）
-	isToolbarVisible: boolean; // 功能栏是否可见
-	bookmarks: number[];       // 书签页码列表
-	chapters: Chapter[];       // 章节列表
+  bookId: string; // 当前书籍 ID
+  bookTitle: string; // 当前书籍标题
+  currentPage: number; // 当前页码（从 0 开始）
+  totalPages: number; // 总页数
+  content: string; // 完整的书籍内容
+  fontSize: number; // 字体大小（单位：mm）
+  lineHeight: number; // 行高（单位：em，倍数）
+  isToolbarVisible: boolean; // 功能栏是否可见
+  bookmarks: number[]; // 书签页码列表
+  chapters: Chapter[]; // 章节列表
 }
 
 /**
@@ -59,8 +59,8 @@ export interface ReaderState {
  * 用户可配置的阅读显示设置
  */
 export interface ReaderSettings {
-	fontSize: number;          // 字体大小（单位：mm，默认 4mm）
-	lineHeight: number;        // 行高（单位：em，默认 1.6）
+  fontSize: number; // 字体大小（单位：mm，默认 4mm）
+  lineHeight: number; // 行高（单位：em，默认 1.6）
 }
 
 /**
@@ -68,8 +68,8 @@ export interface ReaderSettings {
  * 存储用户的阅读进度
  */
 export interface ReadingProgress {
-	currentPage: number;       // 当前页码
-	lastReadTime: string;      // 最后阅读时间（ISO 8601 格式）
+  currentPage: number; // 当前页码
+  lastReadTime: string; // 最后阅读时间（ISO 8601 格式）
 }
 
 /**
@@ -77,7 +77,7 @@ export interface ReadingProgress {
  * 记录每一页的起始位置
  */
 export interface PageInfo {
-	startIndex: number;        // 页面起始字符索引
-	endIndex: number;          // 页面结束字符索引
-	chapterIndex: number;      // 所属章节索引
+  startIndex: number; // 页面起始字符索引
+  endIndex: number; // 页面结束字符索引
+  chapterIndex: number; // 所属章节索引
 }
