@@ -525,35 +525,68 @@ export function createFolder(
  * @returns Promise<Directory[]>
  */
 export function getFolderList(parentUuid?: string): Promise<Directory[]> {
+  var maxAttempts = 3;
+  var baseDelayMs = 300;
+
   return new Promise(function (resolve, reject) {
     var url = "/api/v1/folders";
     if (parentUuid) {
       url += "?parentUuid=" + encodeURIComponent(parentUuid);
     }
 
-    $.ajax({
-      type: "GET",
-      url: url,
-      dataType: "json",
-      success: function (response) {
-        // 后端返回数组，转换为 Directory 类型
-        var folders: Directory[] = [];
-        for (var i = 0; i < response.length; i++) {
-          var item = response[i];
-          folders.push({
-            uuid: item.uuid,
-            name: item.name,
-            type: "directory",
-            order: item.order || 0,
-            parent: undefined, // 父目录引用在调用处设置
-          });
-        }
-        resolve(folders);
-      },
-      error: function (xhr, status, error) {
-        reject(error || { message: "get folder list error", status: status });
-      },
-    });
+    var attempt = 0;
+
+    function doRequest(): void {
+      attempt += 1;
+
+      $.ajax({
+        type: "GET",
+        url: url,
+        dataType: "json",
+        success: function (response) {
+          // 后端返回数组，转换为 Directory 类型
+          var folders: Directory[] = [];
+          for (var i = 0; i < response.length; i++) {
+            var item = response[i];
+            folders.push({
+              uuid: item.uuid,
+              name: item.name,
+              type: "directory",
+              order: item.order || 0,
+              parent: undefined, // 父目录引用在调用处设置
+            });
+          }
+          resolve(folders);
+        },
+        error: function (xhr, status, errorThrown) {
+          var apiError = buildApiRequestError(
+            "get folder list error",
+            xhr,
+            status,
+            errorThrown,
+          );
+
+          // 对瞬时错误做有限重试，避免因为网络波动导致递归删除中断
+          if (attempt < maxAttempts && isTransientApiError(apiError)) {
+            var delayMs = getRetryDelayMs(baseDelayMs, attempt - 1);
+            setTimeout(function () {
+              doRequest();
+            }, delayMs);
+            return;
+          }
+
+          var err: GetFolderListError = {
+            name: "GetFolderListError",
+            message: apiError.message,
+            parentUuid: parentUuid,
+            cause: apiError,
+          };
+          reject(err);
+        },
+      });
+    }
+
+    doRequest();
   });
 }
 
@@ -567,22 +600,58 @@ export function batchDeleteFiles(uuids: string[]): Promise<{
   deleted: number;
   results: Array<{ uuid: string; ok?: boolean; code?: string }>;
 }> {
+  var maxAttempts = 3;
+  var baseDelayMs = 300;
+
   return new Promise(function (resolve, reject) {
-    $.ajax({
-      type: "DELETE",
-      url: "/api/v1/files/batch",
-      data: JSON.stringify({ uuids: uuids }),
-      contentType: "application/json",
-      dataType: "json",
-      success: function (response) {
-        resolve(response);
-      },
-      error: function (xhr, status, error) {
-        reject(
-          error || { message: "batch delete files error", status: status },
-        );
-      },
-    });
+    if (!uuids || uuids.length === 0) {
+      resolve({ ok: true, deleted: 0, results: [] });
+      return;
+    }
+
+    var attempt = 0;
+
+    function doRequest(): void {
+      attempt += 1;
+
+      $.ajax({
+        type: "DELETE",
+        url: "/api/v1/files/batch",
+        data: JSON.stringify({ uuids: uuids }),
+        contentType: "application/json",
+        dataType: "json",
+        success: function (response) {
+          resolve(response);
+        },
+        error: function (xhr, status, errorThrown) {
+          var apiError = buildApiRequestError(
+            "batch delete files error",
+            xhr,
+            status,
+            errorThrown,
+          );
+
+          // 对瞬时错误做有限重试（例如网络抖动/5xx），避免只删了一部分就中断
+          if (attempt < maxAttempts && isTransientApiError(apiError)) {
+            var delayMs = getRetryDelayMs(baseDelayMs, attempt - 1);
+            setTimeout(function () {
+              doRequest();
+            }, delayMs);
+            return;
+          }
+
+          var err: BatchDeleteFilesError = {
+            name: "BatchDeleteFilesError",
+            message: apiError.message,
+            uuids: uuids.slice(0),
+            cause: apiError,
+          };
+          reject(err);
+        },
+      });
+    }
+
+    doRequest();
   });
 }
 
@@ -592,18 +661,57 @@ export function batchDeleteFiles(uuids: string[]): Promise<{
  * @returns Promise<{ ok: boolean }>
  */
 export function deleteFolder(uuid: string): Promise<{ ok: boolean }> {
+  var maxAttempts = 3;
+  var baseDelayMs = 300;
+
   return new Promise(function (resolve, reject) {
-    $.ajax({
-      type: "DELETE",
-      url: "/api/v1/folders/" + encodeURIComponent(uuid),
-      dataType: "json",
-      success: function (response) {
-        resolve(response);
-      },
-      error: function (xhr, status, error) {
-        reject(error || { message: "delete folder error", status: status });
-      },
-    });
+    var attempt = 0;
+
+    function doRequest(): void {
+      attempt += 1;
+
+      $.ajax({
+        type: "DELETE",
+        url: "/api/v1/folders/" + encodeURIComponent(uuid),
+        dataType: "json",
+        success: function (response) {
+          resolve(response);
+        },
+        error: function (xhr, status, errorThrown) {
+          var apiError = buildApiRequestError(
+            "delete folder error",
+            xhr,
+            status,
+            errorThrown,
+          );
+
+          // 删除操作需要具备幂等性：若文件夹已不存在，视为成功，便于恢复/重试
+          if (apiError.status === 404) {
+            resolve({ ok: true });
+            return;
+          }
+
+          // 对瞬时错误做有限重试（例如网络抖动/5xx）
+          if (attempt < maxAttempts && isTransientApiError(apiError)) {
+            var delayMs = getRetryDelayMs(baseDelayMs, attempt - 1);
+            setTimeout(function () {
+              doRequest();
+            }, delayMs);
+            return;
+          }
+
+          var err: DeleteFolderError = {
+            name: "DeleteFolderError",
+            message: apiError.message,
+            uuid: uuid,
+            cause: apiError,
+          };
+          reject(err);
+        },
+      });
+    }
+
+    doRequest();
   });
 }
 
@@ -615,55 +723,173 @@ export function deleteFolder(uuid: string): Promise<{ ok: boolean }> {
 export function deleteFolderRecursive(folderUuid: string): Promise<void> {
   // 可配置的分页大小
   var defaultPageSize = 100;
+  var fileItemRetryAttempts = 2;
+  var fileItemRetryDelayMs = 200;
 
   /**
-   * 分页删除文件夹内的文件
+   * 删除文件夹内的全部文件（支持失败聚合与安全退出）
    * @param parentDir 父目录
-   * @param page 当前页
    * @param pageSize 每页数量
+   * @param acc 失败收集器
    * @returns Promise<void>
    */
   function deleteAllFilesInFolder(
     parentDir: Directory,
-    page: number,
     pageSize: number,
+    acc: DeleteFolderRecursiveFailureAccumulator,
   ): Promise<void> {
-    return getFileList(parentDir, page, pageSize).then(function (pageRes) {
-      var fileUuids: string[] = [];
-      for (var i = 0; i < pageRes.items.length; i++) {
-        if (pageRes.items[i].uuid) {
-          fileUuids.push(pageRes.items[i].uuid);
-        }
+    // 记录已确认“永久失败”的文件，避免无限循环
+    var permanentlyFailedFiles: { [uuid: string]: true } = {};
+
+    function deleteBatchWithItemRetry(
+      uuids: string[],
+      remainingAttempts: number,
+      lastErrorForUuid: { [uuid: string]: unknown },
+    ): Promise<void> {
+      if (!uuids || uuids.length === 0) {
+        return Promise.resolve();
       }
 
-      var deletePromise: Promise<void> = fileUuids.length
-        ? batchDeleteFiles(fileUuids).then(function () {
-            return;
-          })
-        : Promise.resolve();
+      return batchDeleteFiles(uuids)
+        .then(function (res) {
+          var requestedSet: { [uuid: string]: true } = {};
+          for (var i = 0; i < uuids.length; i++) {
+            requestedSet[uuids[i]] = true;
+          }
 
-      return deletePromise.then(function () {
-        var nextOffset = (page + 1) * pageSize;
-        var hasMore =
-          pageRes.items.length > 0 && nextOffset < pageRes.total;
-        if (hasMore) {
-          return deleteAllFilesInFolder(parentDir, page + 1, pageSize);
-        }
-        return;
-      });
-    });
+          var failedNext: string[] = [];
+
+          if (res && res.results && res.results.length) {
+            for (var r = 0; r < res.results.length; r++) {
+              var item = res.results[r];
+              var isOk = item && item.ok === true;
+              var code = item && item.code ? String(item.code) : "";
+
+              // 后端：not_found 表示已不存在，删除语义上视为成功（幂等）
+              if (isOk || code === "not_found") {
+                if (item && item.uuid) {
+                  delete requestedSet[item.uuid];
+                }
+                continue;
+              }
+
+              if (item && item.uuid) {
+                failedNext.push(item.uuid);
+                lastErrorForUuid[item.uuid] = { code: code || "delete_failed" };
+                delete requestedSet[item.uuid];
+              }
+            }
+          }
+
+          // 若后端未返回某些 uuid 的结果，按失败处理并记录
+          for (var missingUuid in requestedSet) {
+            if (requestedSet.hasOwnProperty(missingUuid)) {
+              failedNext.push(missingUuid);
+              lastErrorForUuid[missingUuid] = { code: "missing_result" };
+            }
+          }
+
+          if (failedNext.length === 0) {
+            return;
+          }
+
+          if (remainingAttempts > 0) {
+            return delay(fileItemRetryDelayMs).then(function () {
+              return deleteBatchWithItemRetry(
+                failedNext,
+                remainingAttempts - 1,
+                lastErrorForUuid,
+              );
+            });
+          }
+
+          // 仍失败：标记为永久失败并聚合错误，供调用方恢复/续删
+          for (var f = 0; f < failedNext.length; f++) {
+            var failedUuid = failedNext[f];
+            permanentlyFailedFiles[failedUuid] = true;
+            recordFailedFile(acc, failedUuid, lastErrorForUuid[failedUuid]);
+          }
+        })
+        .catch(function (err) {
+          // batchDeleteFiles 已包含重试；此处认为是永久失败并聚合
+          for (var i = 0; i < uuids.length; i++) {
+            permanentlyFailedFiles[uuids[i]] = true;
+            recordFailedFile(acc, uuids[i], err);
+          }
+        });
+    }
+
+    function processPage(page: number): Promise<void> {
+      return getFileList(parentDir, page, pageSize)
+        .then(function (pageRes) {
+          if (!pageRes || !pageRes.items || pageRes.items.length === 0) {
+            return;
+          }
+
+          var toDelete: string[] = [];
+          for (var i = 0; i < pageRes.items.length; i++) {
+            var uuid = pageRes.items[i].uuid;
+            if (uuid && !permanentlyFailedFiles[uuid]) {
+              toDelete.push(uuid);
+            }
+          }
+
+          // 当前页全部是已确认失败的文件：尝试下一页（避免卡死）
+          if (toDelete.length === 0) {
+            return processPage(page + 1);
+          }
+
+          var lastErrorForUuid: { [uuid: string]: unknown } = {};
+          return deleteBatchWithItemRetry(
+            toDelete,
+            fileItemRetryAttempts,
+            lastErrorForUuid,
+          ).then(function () {
+            // 注意：删除会改变 offset；同页重试，直到该页不再有可删除项
+            return processPage(page);
+          });
+        })
+        .catch(function (err) {
+          // 文件列表获取失败：记录并安全退出（避免无限重试导致卡死）
+          recordFailedFolder(acc, parentDir.uuid, err);
+        });
+    }
+
+    return processPage(0);
   }
 
   return new Promise(function (resolve, reject) {
+    var acc = createDeleteFolderRecursiveFailureAccumulator();
+
+    function finish(): void {
+      if (hasDeleteFolderRecursiveFailures(acc)) {
+        reject(buildDeleteFolderRecursiveError(folderUuid, acc));
+        return;
+      }
+      resolve();
+    }
+
     // 1. 获取文件夹内的子文件夹
     getFolderList(folderUuid)
       .then(function (subFolders) {
-        // 2. 递归删除所有子文件夹
-        var folderPromises: Promise<void>[] = [];
-        for (var i = 0; i < subFolders.length; i++) {
-          folderPromises.push(deleteFolderRecursive(subFolders[i].uuid));
+        // 2. 递归删除所有子文件夹（不因单个失败而提前中断）
+        function deleteNextSubFolder(index: number): Promise<void> {
+          if (index >= subFolders.length) {
+            return Promise.resolve();
+          }
+
+          var sub = subFolders[index];
+          return deleteFolderRecursive(sub.uuid)
+            .catch(function (err) {
+              mergeDeleteFolderRecursiveError(acc, err, sub.uuid);
+              return;
+            })
+            .then(function () {
+              return deleteNextSubFolder(index + 1);
+            });
         }
-        return Promise.all(folderPromises);
+
+        return deleteNextSubFolder(0);
       })
       .then(function () {
         var parentDir: Directory = {
@@ -672,18 +898,257 @@ export function deleteFolderRecursive(folderUuid: string): Promise<void> {
           type: "directory",
           parent: undefined,
         };
-        // 3. 分页删除所有文件
-        return deleteAllFilesInFolder(parentDir, 0, defaultPageSize);
+        // 3. 删除所有文件（失败会聚合到 acc，不会直接 reject）
+        return deleteAllFilesInFolder(parentDir, defaultPageSize, acc);
       })
       .then(function () {
-        // 4. 最后删除文件夹本身
-        return deleteFolder(folderUuid);
-      })
-      .then(function () {
-        resolve();
+        // 4. 最后删除文件夹本身（失败会聚合到 acc）
+        return deleteFolder(folderUuid)
+          .catch(function (err) {
+            recordFailedFolder(acc, folderUuid, err);
+            return { ok: false };
+          })
+          .then(function () {
+            finish();
+          });
       })
       .catch(function (err) {
-        reject(err);
+        // getFolderList 失败属于“无法规划递归删除”的致命错误，直接返回结构化错误
+        recordFailedFolder(acc, folderUuid, err);
+        finish();
       });
   });
+}
+
+interface ApiRequestError {
+  message: string;
+  status?: number;
+  textStatus?: string;
+  responseText?: string;
+  responseJSON?: unknown;
+  errorThrown?: string;
+}
+
+export interface GetFolderListError {
+  name: "GetFolderListError";
+  message: string;
+  parentUuid?: string;
+  cause: ApiRequestError;
+}
+
+export interface BatchDeleteFilesError {
+  name: "BatchDeleteFilesError";
+  message: string;
+  uuids: string[];
+  cause: ApiRequestError;
+}
+
+export interface DeleteFolderError {
+  name: "DeleteFolderError";
+  message: string;
+  uuid: string;
+  cause: ApiRequestError;
+}
+
+export interface DeleteFolderRecursiveError {
+  name: "DeleteFolderRecursiveError";
+  message: string;
+  rootFolderUuid: string;
+  failedFileUuids: string[];
+  failedFolderUuids: string[];
+  fileFailures: Array<{ uuid: string; error: unknown }>;
+  folderFailures: Array<{ uuid: string; error: unknown }>;
+}
+
+interface DeleteFolderRecursiveFailureAccumulator {
+  failedFileUuids: string[];
+  failedFolderUuids: string[];
+  fileFailures: Array<{ uuid: string; error: unknown }>;
+  folderFailures: Array<{ uuid: string; error: unknown }>;
+  failedFileSet: { [uuid: string]: true };
+  failedFolderSet: { [uuid: string]: true };
+}
+
+function createDeleteFolderRecursiveFailureAccumulator(): DeleteFolderRecursiveFailureAccumulator {
+  return {
+    failedFileUuids: [],
+    failedFolderUuids: [],
+    fileFailures: [],
+    folderFailures: [],
+    failedFileSet: {},
+    failedFolderSet: {},
+  };
+}
+
+function hasDeleteFolderRecursiveFailures(
+  acc: DeleteFolderRecursiveFailureAccumulator,
+): boolean {
+  return (
+    acc.failedFileUuids.length > 0 ||
+    acc.failedFolderUuids.length > 0 ||
+    acc.fileFailures.length > 0 ||
+    acc.folderFailures.length > 0
+  );
+}
+
+function recordFailedFile(
+  acc: DeleteFolderRecursiveFailureAccumulator,
+  uuid: string,
+  error: unknown,
+): void {
+  if (!uuid) {
+    return;
+  }
+  if (!acc.failedFileSet[uuid]) {
+    acc.failedFileSet[uuid] = true;
+    acc.failedFileUuids.push(uuid);
+    acc.fileFailures.push({ uuid: uuid, error: error });
+  }
+}
+
+function recordFailedFolder(
+  acc: DeleteFolderRecursiveFailureAccumulator,
+  uuid: string,
+  error: unknown,
+): void {
+  if (!uuid) {
+    return;
+  }
+  if (!acc.failedFolderSet[uuid]) {
+    acc.failedFolderSet[uuid] = true;
+    acc.failedFolderUuids.push(uuid);
+    acc.folderFailures.push({ uuid: uuid, error: error });
+  }
+}
+
+function mergeDeleteFolderRecursiveError(
+  acc: DeleteFolderRecursiveFailureAccumulator,
+  err: unknown,
+  folderUuid: string,
+): void {
+  if (isDeleteFolderRecursiveError(err)) {
+    for (var i = 0; i < err.fileFailures.length; i++) {
+      recordFailedFile(acc, err.fileFailures[i].uuid, err.fileFailures[i].error);
+    }
+    for (var j = 0; j < err.folderFailures.length; j++) {
+      recordFailedFolder(
+        acc,
+        err.folderFailures[j].uuid,
+        err.folderFailures[j].error,
+      );
+    }
+    return;
+  }
+
+  // 非结构化错误：至少确保把当前子文件夹记录为失败，便于续删/回滚
+  recordFailedFolder(acc, folderUuid, err);
+}
+
+function buildDeleteFolderRecursiveError(
+  rootFolderUuid: string,
+  acc: DeleteFolderRecursiveFailureAccumulator,
+): DeleteFolderRecursiveError {
+  return {
+    name: "DeleteFolderRecursiveError",
+    message: "delete folder recursive failed",
+    rootFolderUuid: rootFolderUuid,
+    failedFileUuids: acc.failedFileUuids.slice(0),
+    failedFolderUuids: acc.failedFolderUuids.slice(0),
+    fileFailures: acc.fileFailures.slice(0),
+    folderFailures: acc.folderFailures.slice(0),
+  };
+}
+
+function isDeleteFolderRecursiveError(
+  err: unknown,
+): err is DeleteFolderRecursiveError {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+  var maybe = err as { name?: unknown };
+  return maybe.name === "DeleteFolderRecursiveError";
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(function (resolve) {
+    setTimeout(function () {
+      resolve();
+    }, ms);
+  });
+}
+
+function getRetryDelayMs(baseDelayMs: number, attemptIndex: number): number {
+  // attemptIndex 从 0 开始：0=>base, 1=>2*base, 2=>4*base...
+  return baseDelayMs * Math.pow(2, attemptIndex);
+}
+
+function buildApiRequestError(
+  fallbackMessage: string,
+  xhr: JQueryXHR,
+  textStatus: string,
+  errorThrown: string,
+): ApiRequestError {
+  var status: number | undefined;
+  if (xhr && typeof xhr.status === "number") {
+    status = xhr.status;
+  }
+
+  var responseText: string | undefined;
+  if (xhr && typeof xhr.responseText === "string") {
+    responseText = xhr.responseText;
+  }
+
+  var responseJSON: unknown;
+  var xhrWithJson = xhr as JQueryXHR & { responseJSON?: unknown };
+  if (xhrWithJson && typeof xhrWithJson.responseJSON !== "undefined") {
+    responseJSON = xhrWithJson.responseJSON;
+  }
+
+  var message = fallbackMessage;
+  if (responseJSON && typeof responseJSON === "object") {
+    var maybeMessage = (responseJSON as { message?: unknown }).message;
+    if (typeof maybeMessage === "string" && maybeMessage) {
+      message = maybeMessage;
+    }
+  }
+  if (message === fallbackMessage && errorThrown) {
+    message = String(errorThrown);
+  }
+
+  return {
+    message: message,
+    status: status,
+    textStatus: textStatus,
+    responseText: responseText,
+    responseJSON: responseJSON,
+    errorThrown: errorThrown,
+  };
+}
+
+function isTransientApiError(err: ApiRequestError): boolean {
+  // 没有明确状态码时，通常是网络问题或跨域/取消等，按瞬时处理（交由重试上限兜底）
+  if (typeof err.status !== "number") {
+    return true;
+  }
+
+  // 0 常见于网络断开/请求被取消
+  if (err.status === 0) {
+    return true;
+  }
+
+  // 408/429/5xx 一般可重试
+  if (
+    err.status === 408 ||
+    err.status === 429 ||
+    (err.status >= 500 && err.status <= 599)
+  ) {
+    return true;
+  }
+
+  // jQuery 的 timeout 也视为可重试
+  if (err.textStatus === "timeout") {
+    return true;
+  }
+
+  return false;
 }

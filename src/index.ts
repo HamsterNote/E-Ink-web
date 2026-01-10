@@ -48,44 +48,70 @@ function showHome(): void {
  * - 初始请求时 URL 中的 jwt 参数可能已被记录到：浏览器历史、服务器访问日志、已发送的 Referer 头
  * - 建议：避免在 URL 中传递敏感令牌，优先使用 POST 回调、短期令牌或服务器端令牌交换
  */
-function handleJwtQueryLogin(): void {
-  var jwtFromQuery: string | null = null;
+function handleJwtQueryLogin(): Promise<void> {
+  return new Promise(function (resolve, reject) {
+    var jwtFromQuery: string | null = null;
 
-  try {
-    jwtFromQuery = getQueryParam("jwt");
-  } catch (e) {
-    console.error("Failed to read query parameter:", e);
-    return;
-  }
+    try {
+      jwtFromQuery = getQueryParam("jwt");
+    } catch (e) {
+      console.error("Failed to read query parameter:", e);
+      resolve();
+      return;
+    }
 
-  if (!jwtFromQuery) {
-    return;
-  }
+    if (!jwtFromQuery) {
+      resolve();
+      return;
+    }
 
-  removeQueryParam("jwt");
+    removeQueryParam("jwt");
 
-  try {
-    validateOAuthToken(
-      jwtFromQuery,
-      function () {
-        window.location.reload();
-      },
-      function (error) {
-        console.error("OAuth token validation failed:", error);
-        alert("登录验证失败，请重试");
-      },
-      {
-        statusCode: {
-          401: function () {
-            showLoginModal(false);
+    var settled = false;
+    function safeResolve(): void {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    }
+    function safeReject(err: unknown): void {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(err);
+    }
+
+    try {
+      validateOAuthToken(
+        jwtFromQuery,
+        function () {
+          safeResolve();
+        },
+        function (error) {
+          if (settled) {
+            return;
+          }
+          console.error("OAuth token validation failed:", error);
+          alert("登录验证失败，请重试");
+          safeReject(error);
+        },
+        {
+          statusCode: {
+            401: function () {
+              showLoginModal(false);
+              safeReject({ status: 401, message: "unauthorized" });
+            },
           },
         },
-      },
-    );
-  } catch (e) {
-    console.error("Failed to validate OAuth token:", e);
-    alert("登录验证失败，请重试");
-  }
+      );
+    } catch (e) {
+      console.error("Failed to validate OAuth token:", e);
+      alert("登录验证失败，请重试");
+      safeReject(e);
+    }
+  });
 }
 
 window.showHome = showHome;
@@ -99,15 +125,28 @@ function handleGetUserInfoError(error: unknown): void {
 
 // DOM Ready（使用 jQuery 1.x 风格）
 $(function () {
-  handleJwtQueryLogin();
-  initAjaxSetup();
-  setShowLoginModalCallback(showLoginModal);
-  setRefreshShelfCallback(refreshShelf);
-  setRegisterRefreshShelfCallback(refreshShelf);
-  showHome();
+  function bootstrapApp(): void {
+    initAjaxSetup();
+    setShowLoginModalCallback(showLoginModal);
+    setRefreshShelfCallback(refreshShelf);
+    setRegisterRefreshShelfCallback(refreshShelf);
+    showHome();
 
-  // 获取用户信息
-  getUserInfo(function (userInfo) {
-    showUserInfo(userInfo);
-  }, handleGetUserInfoError);
+    // 获取用户信息
+    getUserInfo(function (userInfo) {
+      showUserInfo(userInfo);
+    }, handleGetUserInfoError);
+  }
+
+  // 若存在 jwt 参数，需要等待 OAuth 验证完成（Cookie 写入）后再初始化
+  handleJwtQueryLogin().then(
+    function () {
+      bootstrapApp();
+    },
+    function (err) {
+      console.error("JWT 参数登录失败:", err);
+      // 验证失败也需要继续初始化：允许用户手动登录/继续使用
+      bootstrapApp();
+    },
+  );
 });

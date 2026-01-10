@@ -21,13 +21,14 @@ import {
 import { renderProgressBar, updateProgress } from "./progress";
 import { renderToolbar, updateBookmarkButton } from "./toolbar";
 import { initInteraction } from "./interaction";
+import { ReaderState } from "./types";
 
 /**
  * 显示阅读器
  * @param bookUuid 书籍唯一标识
  */
 // 用于保存进度订阅者的引用，以便在退出时取消订阅，避免内存泄漏
-var progressObserver: ((state: any) => void) | null = null;
+var progressObserver: ((state: ReaderState) => void) | null = null;
 
 export function showReader(bookUuid: string): void {
   // 清空当前页面内容
@@ -46,6 +47,11 @@ export function showReader(bookUuid: string): void {
     function (response) {
       // 隐藏加载提示
       hideLoading();
+
+      // 确保阅读器 UI 已创建（包含 #reader-content-area）
+      if ($("#reader-content-area").length === 0) {
+        createReaderUI();
+      }
 
       // 初始化状态
       initState(bookUuid, response.title, response.content, response.chapters);
