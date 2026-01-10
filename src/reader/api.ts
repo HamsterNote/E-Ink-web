@@ -21,8 +21,16 @@ import {
  */
 export function getBookContent(bookUuid: string): Promise<BookContentResponse> {
   return new Promise(function (resolve, reject) {
+    // 超时控制：10秒后拒绝请求
+    var timeoutId = setTimeout(function () {
+      reject(new Error("获取书籍内容超时"));
+    }, 10000);
+
     // 模拟网络延迟
     setTimeout(function () {
+      // 清除超时计时器
+      clearTimeout(timeoutId);
+
       try {
         // Mock 书籍内容：一段示例文本
         var mockContent = generateMockBookContent();

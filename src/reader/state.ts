@@ -49,6 +49,7 @@ export function initState(
   // 尝试加载阅读进度
   var progress = loadProgress(bookId);
   if (progress) {
+    // 注意：此时 totalPages 尚未设置，currentPage 将在 reader/index.ts 中根据实际分页结果进行 clamp
     currentState.currentPage = progress.currentPage;
   }
 }
@@ -198,8 +199,14 @@ export function loadSettings(): ReaderSettings {
     if (stored) {
       var settings: ReaderSettings = JSON.parse(stored);
       return {
-        fontSize: settings.fontSize || defaultSettings.fontSize,
-        lineHeight: settings.lineHeight || defaultSettings.lineHeight,
+        fontSize:
+          typeof settings.fontSize === "number"
+            ? settings.fontSize
+            : defaultSettings.fontSize,
+        lineHeight:
+          typeof settings.lineHeight === "number"
+            ? settings.lineHeight
+            : defaultSettings.lineHeight,
       };
     }
   } catch (e) {
@@ -266,10 +273,12 @@ export function addBookmark(page: number): void {
   }
 
   if (currentState.bookmarks.indexOf(page) === -1) {
-    currentState.bookmarks.push(page);
-    currentState.bookmarks.sort(function (a, b) {
+    // 使用不可变方式更新数组，避免直接变更
+    var newBookmarks = currentState.bookmarks.concat([page]);
+    newBookmarks.sort(function (a, b) {
       return a - b;
     });
+    currentState.bookmarks = newBookmarks;
     saveBookmarks();
     notifyObservers();
   }

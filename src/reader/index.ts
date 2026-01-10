@@ -7,6 +7,7 @@ import {
   getState,
   clearState,
   subscribe,
+  unsubscribe,
   saveProgress,
   updateState,
 } from "./state";
@@ -25,6 +26,9 @@ import { initInteraction } from "./interaction";
  * 显示阅读器
  * @param bookUuid 书籍唯一标识
  */
+// 用于保存进度订阅者的引用，以便在退出时取消订阅，避免内存泄漏
+var progressObserver: ((state: any) => void) | null = null;
+
 export function showReader(bookUuid: string): void {
   // 清空当前页面内容
   clearContent();
@@ -57,6 +61,15 @@ export function showReader(bookUuid: string): void {
         state = getState();
 
         if (state) {
+          // 验证并 clamp currentPage，确保不超出范围
+          var restoredPage = state.currentPage;
+          if (restoredPage < 0 || restoredPage >= totalPages) {
+            state.currentPage = Math.max(
+              0,
+              Math.min(restoredPage, totalPages - 1),
+            );
+          }
+
           // 渲染当前页
           renderPage(state.currentPage);
 
@@ -70,11 +83,12 @@ export function showReader(bookUuid: string): void {
         }
       }
 
-      // 订阅状态变化
-      subscribe(function (state) {
+      // 订阅状态变化（保存引用以便退出时取消订阅，避免内存泄漏）
+      progressObserver = function (state) {
         // 状态变化时自动保存进度
         saveProgress();
-      });
+      };
+      subscribe(progressObserver);
 
       // 绑定退出事件
       $(document).one("reader-exit", function () {
@@ -145,6 +159,12 @@ function hideLoading(): void {
  * 退出阅读器，返回书架
  */
 export function exitReader(): void {
+  // 取消订阅，避免内存泄漏
+  if (progressObserver) {
+    unsubscribe(progressObserver);
+    progressObserver = null;
+  }
+
   // 清理状态
   clearState();
 
@@ -165,7 +185,7 @@ export function exitReader(): void {
 export function initReaderModule(): void {
   // 监听返回书架事件
   $(document).on("reader-back-to-shelf", function () {
-    var showHome = (window as any).showHome;
+    var showHome = window.showHome;
     if (typeof showHome === "function") {
       showHome();
     } else {

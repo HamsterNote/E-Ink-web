@@ -8,6 +8,8 @@ import { PageInfo } from "./types";
 // 缓存分页结果，避免重复计算
 var pageCache: PageInfo[] | null = null;
 var cachedContent: string | null = null;
+var cachedFontSize: number | null = null;
+var cachedLineHeight: number | null = null;
 
 /**
  * 渲染指定页码的内容
@@ -79,9 +81,16 @@ export function calculateTotalPages(content: string): number {
  */
 export function splitContentIntoPages(content: string): PageInfo[] {
   var state = getState();
+  var fontSize = state ? state.fontSize : null;
+  var lineHeight = state ? state.lineHeight : null;
 
-  // 如果内容没有变化且已有缓存，直接返回缓存
-  if (cachedContent === content && pageCache) {
+  // 如果内容没有变化且已有缓存，且显示设置也没有变化，直接返回缓存
+  if (
+    cachedContent === content &&
+    pageCache &&
+    cachedFontSize === fontSize &&
+    cachedLineHeight === lineHeight
+  ) {
     return pageCache;
   }
 
@@ -151,9 +160,11 @@ export function splitContentIntoPages(content: string): PageInfo[] {
   // 移除测量容器
   $measurer.remove();
 
-  // 缓存结果
+  // 缓存结果，包括显示设置
   pageCache = pages;
   cachedContent = content;
+  cachedFontSize = fontSize;
+  cachedLineHeight = lineHeight;
 
   return pages;
 }
@@ -172,6 +183,8 @@ export function getPages(): PageInfo[] | null {
 export function clearPageCache(): void {
   pageCache = null;
   cachedContent = null;
+  cachedFontSize = null;
+  cachedLineHeight = null;
 }
 
 /**
@@ -223,6 +236,44 @@ function getContainerHeight(): number {
 }
 
 /**
+ * 查找最近的标签边界（'>' 或 '<'）
+ * @param content 完整内容
+ * @param position 当前位置
+ * @returns 调整后的位置，避免在标签中间切割
+ */
+function findNearestTagBoundary(content: string, position: number): number {
+  // 向右查找最近的 '>'
+  var nextTagEnd = content.indexOf(">", position);
+  if (nextTagEnd !== -1) {
+    nextTagEnd += 1; // 包含 '>'
+  }
+
+  // 向左查找最近的 '<'
+  var prevTagStart = content.lastIndexOf("<", position - 1);
+
+  // 选择更近的边界
+  if (nextTagEnd !== -1 && prevTagStart !== -1) {
+    // 如果位置在标签中间，选择最近的边界
+    if (position > prevTagStart && position < nextTagEnd) {
+      // 比较距离
+      var distToNext = nextTagEnd - position;
+      var distToPrev = position - prevTagStart;
+      if (distToNext <= distToPrev) {
+        return nextTagEnd;
+      } else {
+        return prevTagStart;
+      }
+    }
+  } else if (nextTagEnd !== -1) {
+    return nextTagEnd;
+  } else if (prevTagStart !== -1) {
+    return prevTagStart;
+  }
+
+  return position;
+}
+
+/**
  * 查找一页的结束位置
  * @param $measurer 测量容器
  * @param startIndex 起始位置
@@ -244,6 +295,10 @@ function findPageEnd(
 
   while (left <= right) {
     var mid = Math.floor((left + right) / 2);
+
+    // 确保不在 HTML 标签中间切割
+    mid = findNearestTagBoundary(content, mid);
+
     var testContent = content.substring(startIndex, mid);
 
     $measurer.html(testContent);
@@ -258,12 +313,13 @@ function findPageEnd(
   }
 
   // 在最佳位置附近寻找合适的断点（段落结束、句子结束等）
-  return findBestBreakPoint(content, result, maxHeight, $measurer);
+  return findBestBreakPoint(content, startIndex, result, maxHeight, $measurer);
 }
 
 /**
  * 在最佳位置附近寻找合适的断点
  * @param content 完整内容
+ * @param startIndex 起始位置（用于测量正确的范围）
  * @param position 最佳位置
  * @param maxHeight 最大高度
  * @param $measurer 测量容器
@@ -271,6 +327,7 @@ function findPageEnd(
  */
 function findBestBreakPoint(
   content: string,
+  startIndex: number,
   position: number,
   maxHeight: number,
   $measurer: JQuery<HTMLElement>,
@@ -306,7 +363,8 @@ function findBestBreakPoint(
 
     // 如果找到匹配，验证高度是否合适
     if (lastMatch !== -1 && lastMatch > searchStart) {
-      var testContent = content.substring(searchStart, lastMatch);
+      // 使用 startIndex 而不是 searchStart 来测量实际渲染的范围
+      var testContent = content.substring(startIndex, lastMatch);
       $measurer.html(testContent);
       var height = $measurer.height() || 0;
 
