@@ -19,10 +19,18 @@
 - **Major**: 修复 `state.ts` 中初始化时加载已保存的书签
 - **Major**: 修复 `toolbar.ts` 中章节导航使用硬编码页码估算的问题
 - **Major**: 修复 `toolbar.ts` 中字体/行高变化时保持阅读位置
+- **Major**: 修复 `reader/index.ts` 中内存泄漏（保存进度订阅者并在退出时取消订阅）
+- **Major**: 修复 `reader/renderer.ts` 中 HTML 标签切割问题（添加 findNearestTagBoundary）
+- **Major**: 修复 `reader/renderer.ts` 中 findBestBreakPoint 使用错误的测量范围（添加 startIndex 参数）
+- **Major**: 修复 `reader/renderer.ts` 中页面缓存失效问题（缓存包含 fontSize 和 lineHeight）
+- **Major**: 修复 `reader/state.ts` 中 currentPage 可能超出 totalPages 的问题
+- **Major**: 修复 `reader/state.ts` 中设置 falsy 值检查（使用 typeof 替代 ||）
+- **Major**: 修复 `reader/state.ts` 中书签数组直接变更问题（使用不可变方式更新）
 - **Minor**: 为 `.toc-item` 添加 `:active` 状态（电子墨水屏不支持 hover）
 - **Nitpick**: 扩展 Window 接口以获得类型安全
 - **Nitpick**: 在 `showHome` 不可用时添加错误日志
 - **Nitpick**: 验证加载的阅读设置结构，提供默认值
+- **Nitpick**: 为 `getBookContent` 添加超时保护（10秒）
 
 ## [0.2.0] - 2025-12-28
 
