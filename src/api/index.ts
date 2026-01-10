@@ -752,10 +752,7 @@ export function deleteFolderRecursive(folderUuid: string): Promise<void> {
 
       return batchDeleteFiles(uuids)
         .then(function (res) {
-          var requestedSet: { [uuid: string]: true } = {};
-          for (var i = 0; i < uuids.length; i++) {
-            requestedSet[uuids[i]] = true;
-          }
+          var seenSet: { [uuid: string]: true } = {};
 
           var failedNext: string[] = [];
 
@@ -764,28 +761,30 @@ export function deleteFolderRecursive(folderUuid: string): Promise<void> {
               var item = res.results[r];
               var isOk = item && item.ok === true;
               var code = item && item.code ? String(item.code) : "";
+              if (item && item.uuid) {
+                seenSet[item.uuid] = true;
+              }
 
               // 后端：not_found 表示已不存在，删除语义上视为成功（幂等）
               if (isOk || code === "not_found") {
-                if (item && item.uuid) {
-                  delete requestedSet[item.uuid];
-                }
                 continue;
               }
 
               if (item && item.uuid) {
                 failedNext.push(item.uuid);
                 lastErrorForUuid[item.uuid] = { code: code || "delete_failed" };
-                delete requestedSet[item.uuid];
               }
             }
           }
 
           // 若后端未返回某些 uuid 的结果，按失败处理并记录
-          for (var missingUuid in requestedSet) {
-            if (requestedSet.hasOwnProperty(missingUuid)) {
-              failedNext.push(missingUuid);
-              lastErrorForUuid[missingUuid] = { code: "missing_result" };
+          var missingSet: { [uuid: string]: true } = {};
+          for (var i = 0; i < uuids.length; i++) {
+            var uuid = uuids[i];
+            if (uuid && !seenSet[uuid] && !missingSet[uuid]) {
+              missingSet[uuid] = true;
+              failedNext.push(uuid);
+              lastErrorForUuid[uuid] = { code: "missing_result" };
             }
           }
 
