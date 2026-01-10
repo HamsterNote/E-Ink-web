@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [UnReleased]
+
+### 修复
+- **Critical**: 修复 `progress.ts` 中 `totalPages=1` 时除零错误
+- **Major**: 移除 CSS3 `transform`，使用 CSS2.1 替代方案（进度条滑块）
+- **Major**: 修复 `api.ts` 中 `removeBookmark` 函数实际不删除书签的问题
+- **Major**: 修复 `api.ts` 中 `saveReadingProgress` 未使用参数的问题
+- **Major**: 修复 `index.ts` 中使用 `updateState` 替代直接状态修改，确保触发观察者通知
+- **Major**: 修复 `progress.ts` 中进度条点击可能产生越界页码的问题
+- **Major**: 修复 `renderer.ts` 中章节索引检测逻辑错误
+- **Major**: 修复 `renderer.ts` 中测量容器宽度应匹配真实内容区域
+- **Major**: 修复 `state.ts` 中初始化时加载已保存的书签
+- **Major**: 修复 `toolbar.ts` 中章节导航使用硬编码页码估算的问题
+- **Major**: 修复 `toolbar.ts` 中字体/行高变化时保持阅读位置
+- **Minor**: 为 `.toc-item` 添加 `:active` 状态（电子墨水屏不支持 hover）
+- **Nitpick**: 扩展 Window 接口以获得类型安全
+- **Nitpick**: 在 `showHome` 不可用时添加错误日志
+- **Nitpick**: 验证加载的阅读设置结构，提供默认值
+
 ## [0.2.0] - 2025-12-28
 
 ### 新增
