@@ -24,9 +24,8 @@ export function setShowLoginModalCallback(
 export function initAjaxSetup(): void {
   $.ajaxSetup({
     beforeSend: function (xhr) {
-      // 从 localStorage 中取出令牌
-      var token =
-        localStorage.getItem("jwt_token") || getCookie("jwt_token") || "";
+      // 只从 HttpOnly Cookie 中读取令牌（由服务器设置，更安全）
+      var token = getCookie("jwt_token") || "";
       if (token) {
         // 在请求头中携带令牌，通常格式为 "Bearer <token>"
         xhr.setRequestHeader("Authorization", "Bearer " + token);
@@ -177,9 +176,7 @@ export function login(
       var token = response.access_token as string;
 
       if (token) {
-        // 将令牌保存到 localStorage
-        localStorage.setItem("jwt_token", token);
-        setCookie("jwt_token", token, 30);
+        // Token 由服务器通过 HttpOnly Cookie 设置，客户端不再手动存储
         callback();
       }
     },
@@ -221,8 +218,7 @@ export function register(
       var token = response.access_token as string;
 
       if (token) {
-        localStorage.setItem("jwt_token", token);
-        setCookie("jwt_token", token, 30);
+        // Token 由服务器通过 HttpOnly Cookie 设置，客户端不再手动存储
         if (callback) {
           callback();
         }
@@ -596,6 +592,53 @@ export function deleteFolder(uuid: string): Promise<{ ok: boolean }> {
  * @returns Promise<void>
  */
 export function deleteFolderRecursive(folderUuid: string): Promise<void> {
+  // 可配置的分页大小
+  var defaultPageSize = 100;
+
+  /**
+   * 分页获取文件夹内所有文件
+   * @param parentDir 父目录
+   * @param pageSize 每页数量
+   * @returns Promise<string[]> 所有文件的 UUID 数组
+   */
+  function fetchAllFiles(
+    parentDir: Directory,
+    pageSize: number,
+  ): Promise<string[]> {
+    return getFileList(parentDir, 0, pageSize).then(function (firstPage) {
+      var allUuids: string[] = [];
+
+      // 收集第一页的文件 UUID
+      for (var i = 0; i < firstPage.items.length; i++) {
+        if (firstPage.items[i].uuid) {
+          allUuids.push(firstPage.items[i].uuid);
+        }
+      }
+
+      // 计算总页数并获取剩余页面的文件
+      var totalPages = Math.ceil(firstPage.total / pageSize);
+      var pagePromises: Promise<void>[] = [];
+
+      for (var page = 1; page < totalPages; page++) {
+        (function (p) {
+          pagePromises.push(
+            getFileList(parentDir, p, pageSize).then(function (pageRes) {
+              for (var j = 0; j < pageRes.items.length; j++) {
+                if (pageRes.items[j].uuid) {
+                  allUuids.push(pageRes.items[j].uuid);
+                }
+              }
+            }),
+          );
+        })(page);
+      }
+
+      return Promise.all(pagePromises).then(function () {
+        return allUuids;
+      });
+    });
+  }
+
   return new Promise(function (resolve, reject) {
     // 1. 获取文件夹内的子文件夹
     getFolderList(folderUuid)
@@ -614,20 +657,13 @@ export function deleteFolderRecursive(folderUuid: string): Promise<void> {
           type: "directory",
           parent: undefined,
         };
-        return getFileList(parentDir, 0, 1000);
+        // 3. 分页获取所有文件
+        return fetchAllFiles(parentDir, defaultPageSize);
       })
-      .then(function (fileListRes) {
-        // 4. 删除所有文件
-        if (fileListRes.items.length > 0) {
-          var fileUuids: string[] = [];
-          for (var j = 0; j < fileListRes.items.length; j++) {
-            if (fileListRes.items[j].uuid) {
-              fileUuids.push(fileListRes.items[j].uuid);
-            }
-          }
-          if (fileUuids.length > 0) {
-            return batchDeleteFiles(fileUuids);
-          }
+      .then(function (fileUuids) {
+        // 4. 批量删除所有文件
+        if (fileUuids.length > 0) {
+          return batchDeleteFiles(fileUuids);
         }
         return Promise.resolve(null);
       })
