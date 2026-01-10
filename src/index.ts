@@ -82,6 +82,23 @@ function handleJwtQueryLogin(): void {
 
 window.showHome = showHome;
 
+function clearAuthState(): void {
+  localStorage.removeItem("jwt_token");
+  var cookies = document.cookie.split(";");
+  for (var i = 0; i < cookies.length; i++) {
+    var cookie = cookies[i];
+    var eqPos = cookie.indexOf("=");
+    var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  }
+}
+
+function handleGetUserInfoError(error: unknown): void {
+  console.error("获取用户信息失败:", error);
+  clearAuthState();
+  showLoginModal(false);
+}
+
 // DOM Ready（使用 jQuery 1.x 风格）
 $(function () {
   handleJwtQueryLogin();
@@ -94,5 +111,5 @@ $(function () {
   // 获取用户信息
   getUserInfo(function (userInfo) {
     showUserInfo(userInfo);
-  });
+  }, handleGetUserInfoError);
 });

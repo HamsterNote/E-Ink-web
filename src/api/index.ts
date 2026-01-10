@@ -49,7 +49,7 @@ export function initAjaxSetup(): void {
  */
 export function getUserInfo(
   callback: (userInfo: UserInfo) => void,
-  onError?: () => void,
+  onError?: (error: unknown) => void,
 ): void {
   $.ajax({
     url: "/api/v1/users/me",
@@ -60,13 +60,13 @@ export function getUserInfo(
         callback(response);
       } else {
         if (onError) {
-          onError();
+          onError({ status: xhr.status, message: "非 200 状态码" });
         }
       }
     },
     error: function (xhr, status, error) {
       if (onError) {
-        onError();
+        onError(error);
       }
       console.error("获取用户信息失败:", error);
     },

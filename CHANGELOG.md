@@ -33,6 +33,7 @@
 - **utils**: 增强 Cookie 安全性，添加 Secure 和 SameSite 属性，URL 编码 cookie 值
 
 ### 修复
+- **Major**: 修复 `index.ts` 中 `getUserInfo` 缺少错误处理的问题，添加错误回调处理认证失败场景（清除令牌并显示登录模态框）
 - **Major**: 修复目录交互问题，添加键盘导航支持（tabindex 和 Enter/Space 键事件）
 - **Major**: 添加 `.toc-item:focus` 规则为触控/键盘用户提供视觉反馈（符合 CSS2.1 规范）
 - **Major**: 修复章节索引递增时机错误，将 chapterIndex 递增移到页面推入数组之前
