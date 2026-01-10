@@ -173,8 +173,8 @@ function handleShowTOC(): void {
     var $item = $('<div class="toc-item"></div>');
     $item.text(chapter.title);
     $item.attr("data-chapter-index", String(chapter.index));
+    $item.attr("tabindex", "0");
 
-    // 绑定点击事件
     $item.click(function () {
       var chapterIndex = parseInt(
         $(this).attr("data-chapter-index") || "0",
@@ -182,6 +182,18 @@ function handleShowTOC(): void {
       );
       jumpToChapter(chapterIndex);
       $modal.remove();
+    });
+
+    $item.keydown(function (e) {
+      if (e.keyCode === 13 || e.keyCode === 32) {
+        e.preventDefault();
+        var chapterIndex = parseInt(
+          $(this).attr("data-chapter-index") || "0",
+          10,
+        );
+        jumpToChapter(chapterIndex);
+        $modal.remove();
+      }
     });
 
     $list.append($item);

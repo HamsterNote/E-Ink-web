@@ -131,29 +131,24 @@ export function splitContentIntoPages(content: string): PageInfo[] {
   var chapterIndex = 0;
 
   while (currentIndex < contentLength) {
-    // 查找下一页的结束位置
     var endIndex = findPageEnd($measurer, currentIndex, containerHeight);
 
-    // 确保至少前进一个字符，避免死循环
     if (endIndex <= currentIndex) {
       endIndex = Math.min(currentIndex + 1000, contentLength);
     }
 
-    // 记录分页信息
+    var pageContent = content.substring(currentIndex, endIndex);
+    var h1Matches = pageContent.match(/<h1/gi);
+    if (h1Matches) {
+      chapterIndex += h1Matches.length;
+    }
+
     pages.push({
       startIndex: currentIndex,
       endIndex: endIndex,
       chapterIndex: chapterIndex,
     });
 
-    // 检查当前页是否包含新章节标题
-    var pageContent = content.substring(currentIndex, endIndex);
-    var h1Matches = pageContent.match(/<h1/gi);
-    if (h1Matches && pages.length > 1) {
-      chapterIndex += h1Matches.length;
-    }
-
-    // 更新当前位置
     currentIndex = endIndex;
   }
 

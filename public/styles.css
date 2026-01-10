@@ -575,7 +575,12 @@ body {
 }
 
 .toc-item:hover,
-.toc-item:active {
+.toc-item:active,
+.toc-item:focus {
   background: #eeeeee;
+}
+
+.toc-item {
+  outline: none;
 }
 /*Reader end*/
