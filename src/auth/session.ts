@@ -9,6 +9,9 @@ var AUTH_COOKIE_NAMES: string[] = ["jwt_token"];
 // 如果后端设置了指定域名的 Cookie，可在此配置域名（留空表示不设置 domain）
 var AUTH_COOKIE_DOMAIN = "";
 
+// 仅在非 HttpOnly Cookie 场景下才允许前端主动过期（默认关闭）
+var ALLOW_CLIENT_EXPIRE = false;
+
 function expireAuthCookie(name: string): void {
   var cookie =
     name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
@@ -18,12 +21,13 @@ function expireAuthCookie(name: string): void {
   document.cookie = cookie;
 }
 
-export function clearAuthState(): void {
-  localStorage.removeItem("jwt_token");
-  for (var i = 0; i < AUTH_COOKIE_NAMES.length; i++) {
-    expireAuthCookie(AUTH_COOKIE_NAMES[i]);
+export function clearAuthState(): Promise<void> {
+  if (ALLOW_CLIENT_EXPIRE) {
+    for (var i = 0; i < AUTH_COOKIE_NAMES.length; i++) {
+      expireAuthCookie(AUTH_COOKIE_NAMES[i]);
+    }
   }
-  logoutSession().catch(function (error) {
+  return logoutSession().catch(function (error) {
     console.warn("通知后端退出失败:", error);
   });
 }

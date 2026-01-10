@@ -92,8 +92,9 @@ window.showHome = showHome;
 
 function handleGetUserInfoError(error: unknown): void {
   console.error("获取用户信息失败:", error);
-  clearAuthState();
-  showLoginModal(false);
+  clearAuthState().then(function () {
+    showLoginModal(false);
+  });
 }
 
 // DOM Ready（使用 jQuery 1.x 风格）

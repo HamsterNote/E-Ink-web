@@ -107,17 +107,19 @@ function loadBooks(
   getFileList(parent, page, pageSize).then(function (res) {
     var bookItemList = $(".book");
     var start = page * pageSize;
-    var end = (page + 1) * pageSize - 1;
-    bookItemList.each(function (i, item) {
-      console.log("start ", start, " end ", end, " i ", i);
-      if (i >= start && i <= end) {
-        var resItem = res.items[i - start];
-        if (resItem) {
-          console.log("loadBook ", resItem);
-          createBook(resItem, $(item));
-        }
+    if (!res.items || !res.items.length) {
+      return;
+    }
+    for (var j = 0; j < res.items.length; j++) {
+      var itemIndex = start + j;
+      if (itemIndex >= bookItemList.length) {
+        break;
       }
-    });
+      var $bookItem = $(bookItemList[itemIndex]);
+      if ($bookItem.length) {
+        createBook(res.items[j], $bookItem);
+      }
+    }
   });
 }
 
@@ -328,23 +330,106 @@ function showUploadModal(): void {
   });
   $content.append($uploadButton);
   $content.append($fileName);
+  var $progress = $('<div class="upload-progress"></div>');
+  var $message = $('<div class="upload-message"></div>');
+  $content.append($progress);
+  $content.append($message);
   var $submitButton = $('<button class="ink-button">上传</button>');
+
+  function setSubmitDisabled(disabled: boolean): void {
+    $submitButton.prop("disabled", disabled);
+    if (disabled) {
+      $submitButton.addClass("disabled");
+    } else {
+      $submitButton.removeClass("disabled");
+    }
+  }
+
+  function updateProgress(percent: number): void {
+    $progress.text("上传进度：" + percent + "%");
+  }
+
+  function showMessage(text: string, isError: boolean): void {
+    $message.text(text || "");
+    if (isError) {
+      $message.addClass("error");
+    } else {
+      $message.removeClass("error");
+    }
+  }
+
+  function formatUploadError(error: unknown): string {
+    if (!error) {
+      return "未知错误";
+    }
+    if (typeof error === "string") {
+      return error;
+    }
+    if (typeof error === "object") {
+      var errObj = error as {
+        message?: string;
+        status?: number;
+        body?: string;
+      };
+      var parts: string[] = [];
+      if (errObj.message) {
+        parts.push(errObj.message);
+      }
+      if (errObj.status) {
+        parts.push("状态码 " + errObj.status);
+      }
+      if (errObj.body) {
+        parts.push(String(errObj.body));
+      }
+      if (parts.length) {
+        return parts.join("，");
+      }
+    }
+    return "未知错误";
+  }
+
+  function closeUploadModal(): void {
+    var $modal = $content.closest(".modal");
+    if (!$modal.length) {
+      return;
+    }
+    var modalId = $modal.attr("id");
+    $modal.remove();
+    if (modalId) {
+      var maskId = "modal-mask-" + modalId.replace("modal-", "");
+      $("#" + maskId).remove();
+    }
+  }
+
   $submitButton.click(function () {
     var selectedFile = fileSelected;
     if (!selectedFile) {
       alert("请选择要上传的文件");
       return;
     }
+    if ($submitButton.prop("disabled")) {
+      return;
+    }
+    setSubmitDisabled(true);
+    showMessage("", false);
+    updateProgress(0);
     uploadFile(
       selectedFile,
       function (percent) {
-        console.log(percent);
+        updateProgress(percent);
       },
       function () {
-        console.log("complete");
+        setSubmitDisabled(false);
+        updateProgress(100);
+        showMessage("上传成功", false);
+        setTimeout(function () {
+          closeUploadModal();
+        }, 300);
       },
-      function () {
-        console.log("error");
+      function (error) {
+        setSubmitDisabled(false);
+        var errorText = formatUploadError(error);
+        showMessage("上传失败：" + errorText, true);
       },
     );
   });

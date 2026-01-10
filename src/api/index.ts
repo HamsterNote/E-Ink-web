@@ -24,7 +24,9 @@ export function setShowLoginModalCallback(
 export function initAjaxSetup(): void {
   $.ajaxSetup({
     beforeSend: function (xhr) {
-      // 只从 HttpOnly Cookie 中读取令牌（由服务器设置，更安全）
+      // 注意：getCookie 基于 document.cookie，无法读取 HttpOnly Cookie。
+      // 若后端将 jwt_token 设为 HttpOnly，这里拿不到值，Authorization 头不会设置；
+      // 认证将依赖浏览器自动携带 Cookie（更安全但 JS 无法读取）。仅非 HttpOnly 时才会填充 Authorization 头。
       var token = getCookie("jwt_token") || "";
       if (token) {
         // 在请求头中携带令牌，通常格式为 "Bearer <token>"
@@ -356,8 +358,7 @@ export function uploadFile(
         xhr.open("PUT", "/api/v1/files/" + encodeURIComponent(uuid), true);
         // 携带认证头
         try {
-          var token =
-            localStorage.getItem("jwt_token") || getCookie("jwt_token") || "";
+          var token = getCookie("jwt_token") || "";
           if (token) {
             xhr.setRequestHeader("Authorization", "Bearer " + token);
           }

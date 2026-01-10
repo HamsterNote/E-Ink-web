@@ -12,6 +12,7 @@ import {
   removeBookmark as stateRemoveBookmark,
 } from "./state";
 import { clearAuthState } from "../auth/session";
+import { showLoginModal } from "../auth";
 
 interface ParsedTextItem {
   id: string;
@@ -37,7 +38,9 @@ export function getBookContent(bookUuid: string): Promise<BookContentResponse> {
       },
       statusCode: {
         401: function () {
-          clearAuthState();
+          clearAuthState().then(function () {
+            showLoginModal(false);
+          });
         },
       },
       success: function (response: ParseDocumentResponse) {
