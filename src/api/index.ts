@@ -2,7 +2,7 @@
 // TypeScript 仅做类型检查；输出通过 Babel/webpack 降级为 ES5。
 import $ from "jquery";
 import { BookFile, Directory, GetFileListResponse, UserInfo } from "../types";
-import { getCookie } from "../utils";
+import { getCookie, setCookie } from "../utils";
 
 // 显示登录模态框的回调（由 auth 模块设置）
 var showLoginModalCallback: ((showClose: boolean) => void) | null = null;
@@ -179,7 +179,7 @@ export function login(
       if (token) {
         // 将令牌保存到 localStorage
         localStorage.setItem("jwt_token", token);
-        document.cookie = "jwt_token=" + token;
+        setCookie("jwt_token", token, 30);
         callback();
       }
     },
@@ -222,7 +222,7 @@ export function register(
 
       if (token) {
         localStorage.setItem("jwt_token", token);
-        document.cookie = "jwt_token=" + token;
+        setCookie("jwt_token", token, 30);
         if (callback) {
           callback();
         }
