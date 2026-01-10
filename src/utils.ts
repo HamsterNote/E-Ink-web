@@ -13,7 +13,7 @@ export function getCookie(name: string): string | null {
   for (var i = 0; i < cookies.length; i++) {
     var cookie = cookies[i].trim();
     if (cookie.indexOf(name + "=") === 0) {
-      return cookie.substring(name.length + 1);
+      return decodeURIComponent(cookie.substring(name.length + 1));
     }
   }
   return null;
@@ -71,9 +71,38 @@ export function setCookie(
 /**
  * 删除指定名称的 Cookie
  * @param name Cookie 名称
+ * @param options 可选配置
+ * @param options.path Cookie 路径（默认 "/"）
+ * @param options.domain Cookie 域名（可选）
+ * @param options.secure 是否仅通过 HTTPS 发送（默认 true）
+ * @param options.sameSite SameSite 属性（默认 "Lax"）
  */
-export function removeCookie(name: string): void {
-  document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+export function removeCookie(
+  name: string,
+  options?: {
+    path?: string;
+    domain?: string;
+    secure?: boolean;
+    sameSite?: "Strict" | "Lax" | "None";
+  },
+): void {
+  var path = options && options.path ? options.path : "/";
+  var domain = options && options.domain ? options.domain : "";
+  var secure = options && options.secure !== undefined ? options.secure : true;
+  var sameSite =
+    options && options.sameSite !== undefined ? options.sameSite : "Lax";
+
+  var domainFlag = domain ? "; domain=" + domain : "";
+  var secureFlag = secure ? "; Secure" : "";
+  var sameSiteFlag = "; SameSite=" + sameSite;
+
+  document.cookie =
+    name +
+    "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=" +
+    path +
+    domainFlag +
+    secureFlag +
+    sameSiteFlag;
 }
 
 // URL Query 参数操作
