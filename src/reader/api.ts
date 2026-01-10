@@ -27,38 +27,42 @@ interface ParseDocumentResponse {
   items: ParsedTextItem[];
 }
 
-export function getBookContent(bookUuid: string): Promise<BookContentResponse> {
-  return new Promise(function (resolve, reject) {
-    $.ajax({
-      type: "GET",
-      url: "/api/v1/files/" + encodeURIComponent(bookUuid) + "/parsed-texts",
-      dataType: "json",
-      xhrFields: {
-        withCredentials: true,
+export function getBookContent(
+  bookUuid: string,
+  callback: (response: BookContentResponse) => void,
+  onError?: (error: unknown) => void,
+): void {
+  $.ajax({
+    type: "GET",
+    url: "/api/v1/files/" + encodeURIComponent(bookUuid) + "/parsed-texts",
+    dataType: "json",
+    xhrFields: {
+      withCredentials: true,
+    },
+    statusCode: {
+      401: function () {
+        clearAuthState().then(function () {
+          showLoginModal(false);
+        });
       },
-      statusCode: {
-        401: function () {
-          clearAuthState().then(function () {
-            showLoginModal(false);
-          });
-        },
-      },
-      success: function (response: ParseDocumentResponse) {
-        var htmlContent = buildHtmlContent(response.items);
+    },
+    success: function (response: ParseDocumentResponse) {
+      var htmlContent = buildHtmlContent(response.items);
 
-        var result: BookContentResponse = {
-          uuid: bookUuid,
-          title: response.title || "未知标题",
-          content: htmlContent,
-          chapters: [],
-        };
+      var result: BookContentResponse = {
+        uuid: bookUuid,
+        title: response.title || "未知标题",
+        content: htmlContent,
+        chapters: [],
+      };
 
-        resolve(result);
-      },
-      error: function (xhr, status, error) {
-        reject(error || { message: "get book content error", status: status });
-      },
-    });
+      callback(result);
+    },
+    error: function (xhr, status, error) {
+      if (onError) {
+        onError(error || { message: "get book content error", status: status });
+      }
+    },
   });
 }
 
@@ -111,85 +115,115 @@ function escapeHtml(text: string): string {
 /**
  * 保存阅读进度（通过状态管理器）
  * 注意：此函数使用当前状态保存进度，参数仅为 API 兼容性保留
+ * @param callback 成功回调
+ * @param onError 错误回调
  */
 export function saveReadingProgress(
   _bookUuid: string,
   _page: number,
-): Promise<void> {
-  return new Promise(function (resolve, reject) {
-    try {
-      saveProgress();
-      resolve();
-    } catch (e) {
-      reject(e);
+  callback?: () => void,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    saveProgress();
+    if (callback) {
+      callback();
     }
-  });
+  } catch (e) {
+    if (onError) {
+      onError(e);
+    }
+  }
 }
 
 /**
  * 获取阅读进度（通过状态管理器）
  * @param bookUuid 书籍唯一标识
- * @returns Promise<ReadingProgress | null> 阅读进度，如果不存在则返回 null
+ * @param callback 成功回调
+ * @param onError 错误回调
  */
 export function getReadingProgress(
   bookUuid: string,
-): Promise<ReadingProgress | null> {
-  return new Promise(function (resolve, reject) {
-    try {
-      var progress = loadProgress(bookUuid);
-      resolve(progress);
-    } catch (e) {
-      reject(e);
+  callback: (progress: ReadingProgress | null) => void,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    var progress = loadProgress(bookUuid);
+    callback(progress);
+  } catch (e) {
+    if (onError) {
+      onError(e);
     }
-  });
+  }
 }
 
 /**
  * 保存书签（通过状态管理器）
  * @param bookUuid 书籍唯一标识
  * @param page 页码
- * @returns Promise<void>
+ * @param callback 成功回调
+ * @param onError 错误回调
  */
-export function saveBookmark(_bookUuid: string, page: number): Promise<void> {
-  return new Promise(function (resolve, reject) {
-    try {
-      stateAddBookmark(page);
-      resolve();
-    } catch (e) {
-      reject(e);
+export function saveBookmark(
+  _bookUuid: string,
+  page: number,
+  callback?: () => void,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    stateAddBookmark(page);
+    if (callback) {
+      callback();
     }
-  });
+  } catch (e) {
+    if (onError) {
+      onError(e);
+    }
+  }
 }
 
 /**
  * 删除书签（通过状态管理器）
  * @param bookUuid 书籍唯一标识
  * @param page 页码
- * @returns Promise<void>
+ * @param callback 成功回调
+ * @param onError 错误回调
  */
-export function removeBookmark(_bookUuid: string, page: number): Promise<void> {
-  return new Promise(function (resolve, reject) {
-    try {
-      stateRemoveBookmark(page);
-      resolve();
-    } catch (e) {
-      reject(e);
+export function removeBookmark(
+  _bookUuid: string,
+  page: number,
+  callback?: () => void,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    stateRemoveBookmark(page);
+    if (callback) {
+      callback();
     }
-  });
+  } catch (e) {
+    if (onError) {
+      onError(e);
+    }
+  }
 }
 
 /**
  * 获取书签列表（通过状态管理器）
  * @param bookUuid 书籍唯一标识
- * @returns Promise<number[]> 书签页码列表
+ * @param callback 成功回调
+ * @param onError 错误回调
  */
-export function getBookmarks(bookUuid: string): Promise<number[]> {
-  return new Promise(function (resolve, reject) {
-    try {
-      var bookmarks = loadBookmarks(bookUuid);
-      resolve(bookmarks);
-    } catch (e) {
-      reject(e);
+export function getBookmarks(
+  bookUuid: string,
+  callback: (bookmarks: number[]) => void,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    var bookmarks = loadBookmarks(bookUuid);
+    callback(bookmarks);
+  } catch (e) {
+    if (onError) {
+      onError(e);
     }
-  });
+  }
 }

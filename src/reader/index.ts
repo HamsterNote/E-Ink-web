@@ -41,8 +41,9 @@ export function showReader(bookUuid: string): void {
   showLoading();
 
   // 获取书籍内容
-  getBookContent(bookUuid)
-    .then(function (response) {
+  getBookContent(
+    bookUuid,
+    function (response) {
       // 隐藏加载提示
       hideLoading();
 
@@ -97,8 +98,8 @@ export function showReader(bookUuid: string): void {
       $(document).one("reader-exit", function () {
         exitReader();
       });
-    })
-    .catch(function (error) {
+    },
+    function (error) {
       // 隐藏加载提示
       hideLoading();
 
@@ -108,7 +109,8 @@ export function showReader(bookUuid: string): void {
 
       // 退出阅读器
       exitReader();
-    });
+    },
+  );
 }
 
 // 挂载到全局，便于脚本加载后调用

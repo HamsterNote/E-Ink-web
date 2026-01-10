@@ -203,14 +203,9 @@ export function login(
       email: email,
       password: password,
     },
-    success: function (response) {
-      // 从响应头获取令牌（取决于后端设置）
-      var token = response.access_token as string;
-
-      if (token) {
-        // Token 由服务器通过 HttpOnly Cookie 设置，客户端不再手动存储
-        callback();
-      }
+    success: function () {
+      // 登录成功后后端可能通过 HttpOnly Cookie 设置会话，不依赖 access_token
+      callback();
     },
     error: function () {
       alert("登录失败！请检查邮箱和密码");
@@ -227,7 +222,6 @@ export function login(
  * @param emailCode 邮箱验证码
  * @param callback 成功回调
  * @param onError 错误回调
- * @returns Promise<string | null> 返回 token 或 null
  */
 export function register(
   email: string,
@@ -246,14 +240,10 @@ export function register(
       username: username,
       emailCode: emailCode,
     },
-    success: function (response) {
-      var token = response.access_token as string;
-
-      if (token) {
-        // Token 由服务器通过 HttpOnly Cookie 设置，客户端不再手动存储
-        if (callback) {
-          callback();
-        }
+    success: function () {
+      // 注册成功后后端可能通过 HttpOnly Cookie 设置会话，不依赖 access_token
+      if (callback) {
+        callback();
       }
     },
     error: function (xhr) {
