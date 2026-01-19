@@ -27,41 +27,89 @@ interface ParseDocumentResponse {
   items: ParsedTextItem[];
 }
 
+interface FileStatusResponse {
+  status?: string;
+}
+
+function isParsedStatus(status: string | undefined): boolean {
+  if (!status) {
+    return false;
+  }
+  var normalized = String(status).toLowerCase();
+  return (
+    normalized === "parsed" ||
+    normalized === "ready" ||
+    normalized === "done" ||
+    normalized === "completed" ||
+    normalized === "success"
+  );
+}
+
 export function getBookContent(
   bookUuid: string,
   callback: (response: BookContentResponse) => void,
   onError?: (error: unknown) => void,
 ): void {
+  function requestParsedTexts(): void {
+    $.ajax({
+      type: "GET",
+      url: "/api/v1/files/" + encodeURIComponent(bookUuid) + "/parsed-texts",
+      dataType: "json",
+      xhrFields: {
+        withCredentials: true,
+      },
+      statusCode: {
+        401: function () {
+          clearAuthState().then(function () {
+            showLoginModal(false);
+          });
+        },
+      },
+      success: function (response: ParseDocumentResponse) {
+        var htmlContent = buildHtmlContent(response.items);
+
+        var result: BookContentResponse = {
+          uuid: bookUuid,
+          title: response.title || "未知标题",
+          content: htmlContent,
+          chapters: [],
+        };
+
+        callback(result);
+      },
+      error: function (xhr, status, error) {
+        if (onError) {
+          onError(
+            error || { message: "get book content error", status: status },
+          );
+        }
+      },
+    });
+  }
+
   $.ajax({
     type: "GET",
-    url: "/api/v1/files/" + encodeURIComponent(bookUuid) + "/parsed-texts",
+    url: "/api/v1/files/" + encodeURIComponent(bookUuid) + "/status",
     dataType: "json",
     xhrFields: {
       withCredentials: true,
     },
-    statusCode: {
-      401: function () {
-        clearAuthState().then(function () {
-          showLoginModal(false);
-        });
-      },
-    },
-    success: function (response: ParseDocumentResponse) {
-      var htmlContent = buildHtmlContent(response.items);
-
-      var result: BookContentResponse = {
-        uuid: bookUuid,
-        title: response.title || "未知标题",
-        content: htmlContent,
-        chapters: [],
-      };
-
-      callback(result);
-    },
-    error: function (xhr, status, error) {
-      if (onError) {
-        onError(error || { message: "get book content error", status: status });
+    success: function (response: FileStatusResponse) {
+      var status = response && response.status;
+      if (!status) {
+        requestParsedTexts();
+        return;
       }
+      if (isParsedStatus(status)) {
+        requestParsedTexts();
+        return;
+      }
+      if (onError) {
+        onError({ message: "文件解析中，请稍后重试", status: status });
+      }
+    },
+    error: function () {
+      requestParsedTexts();
     },
   });
 }

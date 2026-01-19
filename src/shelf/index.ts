@@ -80,14 +80,18 @@ function isBook(
  */
 export function createShelf(): JQuery<HTMLElement> {
   currentShelfDirectory = undefined;
+  // 进入首页/返回书架时，强制清空缓存，确保书架自动刷新为最新数据
+  clearLoadedDirectory();
   setRefreshShelfForMultiSelect(function () {
     clearLoadedDirectory();
     refreshShelf();
   });
   var $shelf = $('<div id="shelf"></div>');
-  $shelf.ready(function () {
+  // 注意：jQuery 的 .ready 只绑定 document ready，可能在 #shelf 插入 DOM 前就触发
+  // 因此这里用 setTimeout 让刷新在插入 DOM 后执行（避免 $("#shelf") 取不到元素）
+  setTimeout(function () {
     refreshShelf();
-  });
+  }, 0);
   var bottomBar = $("#bottom-bar");
   bottomBar.append(createShelfBottomBar());
   return $shelf;
@@ -422,6 +426,9 @@ function showUploadModal(): void {
         setSubmitDisabled(false);
         updateProgress(100);
         showMessage("上传成功", false);
+        // 上传成功后刷新书架，确保新书立即可见
+        clearLoadedDirectory();
+        refreshShelf();
         setTimeout(function () {
           closeUploadModal();
         }, 300);

@@ -23,6 +23,9 @@ export function setShowLoginModalCallback(
  */
 export function initAjaxSetup(): void {
   $.ajaxSetup({
+    xhrFields: {
+      withCredentials: true,
+    },
     beforeSend: function (xhr) {
       // 注意：getCookie 基于 document.cookie，无法读取 HttpOnly Cookie。
       // 若后端将 jwt_token 设为 HttpOnly，这里拿不到值，Authorization 头不会设置；
@@ -183,6 +186,66 @@ export function logoutSession(): Promise<void> {
   });
 }
 
+function isLikelyJwt(token: string): boolean {
+  if (!token) {
+    return false;
+  }
+  return token.split(".").length >= 3;
+}
+
+function getJwtFromResponse(response: unknown): string | null {
+  if (!response) {
+    return null;
+  }
+
+  if (typeof response === "string") {
+    try {
+      return getJwtFromResponse(JSON.parse(response));
+    } catch (e) {
+      return isLikelyJwt(response) ? response : null;
+    }
+  }
+
+  if (typeof response !== "object") {
+    return null;
+  }
+
+  var record = response as { [key: string]: unknown };
+  var token =
+    record.jwt ||
+    record.token ||
+    record.jwt_token ||
+    record.access_token ||
+    record.accessToken;
+
+  if (!token && record.data && typeof record.data === "object") {
+    var dataRecord = record.data as { [key: string]: unknown };
+    token =
+      dataRecord.jwt ||
+      dataRecord.token ||
+      dataRecord.jwt_token ||
+      dataRecord.access_token ||
+      dataRecord.accessToken;
+  }
+
+  if (typeof token !== "string" || !token) {
+    return null;
+  }
+
+  return isLikelyJwt(token) ? token : null;
+}
+
+function persistJwtToken(token: string): void {
+  var isHttps = false;
+  if (typeof window !== "undefined" && window.location) {
+    isHttps = window.location.protocol === "https:";
+  }
+  setCookie("jwt_token", token, undefined, {
+    secure: isHttps,
+    sameSite: "Lax",
+  });
+}
+
 /**
  * 用户登录
  * @param email 邮箱
@@ -203,8 +266,12 @@ export function login(
       email: email,
       password: password,
     },
-    success: function () {
+    success: function (response) {
       // 登录成功后后端可能通过 HttpOnly Cookie 设置会话，不依赖 access_token
+      var token = getJwtFromResponse(response as unknown);
+      if (token) {
+        persistJwtToken(token);
+      }
       callback();
     },
     error: function () {
@@ -1027,7 +1094,11 @@ function mergeDeleteFolderRecursiveError(
 ): void {
   if (isDeleteFolderRecursiveError(err)) {
     for (var i = 0; i < err.fileFailures.length; i++) {
-      recordFailedFile(acc, err.fileFailures[i].uuid, err.fileFailures[i].error);
+      recordFailedFile(
+        acc,
+        err.fileFailures[i].uuid,
+        err.fileFailures[i].error,
+      );
     }
     for (var j = 0; j < err.folderFailures.length; j++) {
       recordFailedFolder(
